@@ -1,0 +1,397 @@
+/* ===========================================================
+   商品ポップメーカー — UI スタイル
+   （プレビュー本体は canvas 描画なので、ここは操作画面のみ）
+   =========================================================== */
+
+:root {
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --line: #dcdfe4;
+  --text: #1f2328;
+  --text-sub: #616a75;
+  --accent: #0b6bcb;
+  --accent-weak: #e7f0fb;
+  --danger: #c0392b;
+  --radius: 10px;
+  --shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 4px 12px rgba(16, 24, 40, .06);
+  --panel-w: 400px;
+  --bar-h: 56px;
+  font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic", "Meiryo",
+    "Noto Sans JP", system-ui, -apple-system, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* ---------- アプリバー ---------- */
+.appbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: var(--bar-h);
+  padding: 8px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+
+.appbar__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  white-space: nowrap;
+}
+
+.appbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+/* ---------- レイアウト ---------- */
+.layout {
+  display: grid;
+  grid-template-columns: var(--panel-w) 1fr;
+  align-items: start;
+  gap: 0;
+  min-height: calc(100vh - var(--bar-h));
+}
+
+.panel {
+  border-right: 1px solid var(--line);
+  background: var(--surface);
+  padding: 8px 0 64px;
+  position: sticky;
+  top: var(--bar-h);
+  max-height: calc(100vh - var(--bar-h));
+  overflow-y: auto;
+}
+
+/* ---------- セクション ---------- */
+.sect { border-bottom: 1px solid var(--line); }
+
+.sect__head {
+  cursor: pointer;
+  padding: 12px 16px;
+  font-weight: 700;
+  font-size: 13px;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+}
+
+.sect__head::-webkit-details-marker { display: none; }
+
+.sect__head::before {
+  content: "▸";
+  color: var(--text-sub);
+  transition: transform .15s ease;
+}
+
+.sect[open] > .sect__head::before { transform: rotate(90deg); }
+.sect__head:hover { background: var(--accent-weak); }
+
+.sect__body {
+  padding: 4px 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ---------- フォーム部品 ---------- */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.field--inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.field--compact .field__label { font-size: 11px; white-space: nowrap; }
+
+.field__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-sub);
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.field__label--req::after {
+  content: "必須";
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--danger);
+  border-radius: 3px;
+  padding: 0 4px;
+}
+
+.field__hint {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-sub);
+}
+
+.field__out {
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.control {
+  width: 100%;
+  min-width: 0;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 7px 9px;
+}
+
+.control:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+
+textarea.control { resize: vertical; line-height: 1.5; }
+
+.control--range {
+  padding: 0;
+  border: none;
+  background: transparent;
+  accent-color: var(--accent);
+  height: 22px;
+}
+
+.control--color {
+  padding: 2px;
+  height: 34px;
+  cursor: pointer;
+}
+
+.grid { display: grid; gap: 10px; }
+.grid--2 { grid-template-columns: 1fr 1fr; }
+.grid--3 { grid-template-columns: repeat(3, 1fr); }
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.check input { accent-color: var(--accent); width: 15px; height: 15px; }
+
+.btnrow { display: flex; gap: 8px; align-items: center; }
+
+.sep { border: none; border-top: 1px solid var(--line); margin: 4px 0; width: 100%; }
+
+/* ---------- ボタン ---------- */
+.btn {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 7px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn:hover { background: var(--accent-weak); border-color: var(--accent); }
+.btn:active { transform: translateY(1px); }
+
+.btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.btn--primary:hover { background: #0a5aab; border-color: #0a5aab; }
+.btn--ghost { color: var(--text-sub); }
+.btn--sm { padding: 5px 10px; font-size: 12px; }
+
+/* ---------- タブ ---------- */
+.tabs {
+  display: flex;
+  gap: 2px;
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 3px;
+  flex-wrap: wrap;
+}
+
+.tab {
+  flex: 1 1 auto;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-sub);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 4px;
+  cursor: pointer;
+}
+
+.tab.is-active {
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: var(--shadow);
+}
+
+.tabpanel { display: none; flex-direction: column; gap: 10px; padding-top: 4px; }
+.tabpanel.is-active { display: flex; }
+
+/* ---------- テンプレート一覧 ---------- */
+.templates {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.template {
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 0;
+  cursor: pointer;
+  overflow: hidden;
+  font: inherit;
+  text-align: center;
+}
+
+.template:hover { border-color: var(--accent); }
+.template.is-active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-weak); }
+
+.template__swatch {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.template__name {
+  display: block;
+  font-size: 11px;
+  padding: 4px 2px;
+  color: var(--text-sub);
+  border-top: 1px solid var(--line);
+}
+
+/* ---------- 保存済みプリセット ---------- */
+.presets { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+
+.presets li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 5px 6px 5px 10px;
+  font-size: 12.5px;
+}
+
+.presets li span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.presets__empty { color: var(--text-sub); font-size: 12px; }
+
+/* ---------- プレビュー ---------- */
+.preview {
+  padding: 16px 20px 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.preview__bar {
+  width: 100%;
+  max-width: 720px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text-sub);
+}
+
+.preview__status { color: var(--accent); font-weight: 600; }
+
+.preview__stage {
+  width: 100%;
+  max-width: 720px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  background:
+    linear-gradient(45deg, #e9ebee 25%, transparent 25%, transparent 75%, #e9ebee 75%),
+    linear-gradient(45deg, #e9ebee 25%, transparent 25%, transparent 75%, #e9ebee 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 10px 10px;
+  background-color: #f8f9fa;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.preview__canvas {
+  max-width: 100%;
+  height: auto;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .12), 0 12px 32px rgba(0, 0, 0, .12);
+  background: #fff;
+}
+
+.preview__note { font-size: 11px; color: var(--text-sub); margin: 0; }
+
+/* ---------- レスポンシブ ---------- */
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; }
+  .panel {
+    position: static;
+    max-height: none;
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+    order: 2;
+  }
+  .preview { order: 1; }
+  .appbar__actions { width: 100%; margin-left: 0; }
+}
+
+@media print {
+  body { background: #fff; }
+  .appbar, .panel, .preview__bar, .preview__note { display: none !important; }
+  .preview__stage { border: none; padding: 0; background: none; }
+  .preview__canvas { box-shadow: none; }
+}
