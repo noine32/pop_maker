@@ -77,7 +77,8 @@
     var html = TEXT_FIELDS.map(function (f, idx) {
       var k = f.key;
       var parts = [];
-      parts.push('<div class="tabpanel' + (idx === 0 ? ' is-active' : '') + '" data-panel="' + k + '">');
+      parts.push('<div class="tabpanel' + (idx === 0 ? ' is-active' : '') +
+        '" id="panel-' + k + '" role="tabpanel" aria-labelledby="tab-' + k + '" tabindex="0" data-panel="' + k + '">');
 
       parts.push(
         '<label class="field"><span class="field__label">' + f.label + 'のフォント</span>' +
@@ -129,6 +130,22 @@
     document.getElementById('text-panels').innerHTML = html;
   }
 
+  /* タブ選択（クラス・aria-selected・roving tabindex を同期。focus指定でフォーカス移動） */
+  function selectTab(key, focus) {
+    var tabs = document.querySelectorAll('#text-tabs .tab');
+    for (var i = 0; i < tabs.length; i++) {
+      var t = tabs[i], on = t.getAttribute('data-tab') === key;
+      t.classList.toggle('is-active', on);
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+      t.tabIndex = on ? 0 : -1;
+      if (on && focus) t.focus();
+    }
+    var panels = document.querySelectorAll('.tabpanel');
+    for (var j = 0; j < panels.length; j++) {
+      panels[j].classList.toggle('is-active', panels[j].getAttribute('data-panel') === key);
+    }
+  }
+
   /* ---------- 用紙・テンプレートの生成 ---------- */
   function buildPaperOptions() {
     var groups = {}, order = [];
@@ -157,8 +174,17 @@
   function parseValue(el) {
     if (el.type === 'checkbox') return el.checked;
     if (el.type === 'range' || el.type === 'number') {
+      /* 空欄・不正はそのフィールドの min（無ければ0）へ。size=0 で文字が潰れるのを防ぐ。
+         min/max があれば範囲内へクランプする。 */
+      var min = el.min !== '' ? Number(el.min) : null;
+      var max = el.max !== '' ? Number(el.max) : null;
+      if (el.value === '' || isNaN(Number(el.value))) {
+        return (min !== null && !isNaN(min)) ? min : 0;
+      }
       var n = Number(el.value);
-      return isNaN(n) ? 0 : n;
+      if (min !== null && !isNaN(min) && n < min) n = min;
+      if (max !== null && !isNaN(max) && n > max) n = max;
+      return n;
     }
     if (el.tagName === 'SELECT' && /^(400|700|900)$/.test(el.value)) return Number(el.value);
     return el.value;
@@ -249,6 +275,11 @@
     metaEl.textContent = (paper ? paper.label.replace(/（.*/, '') : '') +
       ' / ' + size.w + '×' + size.h + 'mm / ' +
       (state.paper.orientation === 'landscape' ? '横' : '縦');
+
+    /* スクリーンリーダー向けに現在の内容を要約 */
+    canvas.setAttribute('aria-label',
+      '商品ポップのプレビュー：商品名「' + (String(state.name.text || '').trim() || '未入力') +
+      '」／価格 ' + (String(state.price.value || '').trim() || '未入力'));
 
     if (result.overflow) setStatus('内容が用紙に収まりきりません。文字サイズを下げてください。');
     else if (result.fontScale < 0.999) setStatus('自動縮小中（' + Math.round(result.fontScale * 100) + '%）');
@@ -470,6 +501,20 @@
     }
   }
 
+  /* 画像を用紙外へ逃がしすぎないようクランプ（掴めなくなるのを防ぐ）。
+     ブリード（端の外へ少しはみ出す）は許容しつつ、各辺に最低 keep mm は
+     用紙内へ残す。幅はUIスライダーと同じ 10〜600mm に収める。 */
+  function clampImage() {
+    var im = state.image;
+    if (!im || !im.src) return;
+    var size = POPPresets.paperSize(state);
+    im.wMm = Math.max(10, Math.min(600, Number(im.wMm) || 10));
+    var hMm = im.wMm / (im.aspect || 1);
+    var keep = Math.min(20, im.wMm, hMm);
+    im.xMm = Math.max(keep - im.wMm, Math.min(size.w - keep, im.xMm));
+    im.yMm = Math.max(keep - hMm, Math.min(size.h - keep, im.yMm));
+  }
+
   function onImagePointerMove(ev) {
     if (!imgDrag) { updateImageCursor(ev); return; }
     ev.preventDefault();
@@ -480,12 +525,13 @@
     } else {
       var dxMm = Math.abs(mm.x - imgDrag.anchor.x);
       var dyMm = Math.abs(mm.y - imgDrag.anchor.y);
-      var newW = Math.max(10, Math.max(dxMm, dyMm * (im.aspect || 1)));
+      var newW = Math.max(10, Math.min(600, Math.max(dxMm, dyMm * (im.aspect || 1))));
       var newH = newW / (im.aspect || 1);
       im.wMm = newW;
       im.xMm = imgDrag.left ? imgDrag.anchor.x - newW : imgDrag.anchor.x;
       im.yMm = imgDrag.top ? imgDrag.anchor.y - newH : imgDrag.anchor.y;
     }
+    clampImage();
     syncUI();
     requestRender();
   }
@@ -572,21 +618,29 @@
       var path = el.getAttribute('data-path');
       if (!path) return;
       setPath(state, path, parseValue(el));
+      if (path.indexOf('image.') === 0) clampImage();   /* 幅・X・Y の直接入力もクランプ */
       syncUI();
       requestRender();
     }
 
-    /* タブ切り替え */
-    document.getElementById('text-tabs').addEventListener('click', function (ev) {
+    /* タブ切り替え（クリック＋キーボード：←→ Home End） */
+    var tablist = document.getElementById('text-tabs');
+    tablist.addEventListener('click', function (ev) {
       var btn = ev.target.closest('[data-tab]');
-      if (!btn) return;
-      var key = btn.getAttribute('data-tab');
-      this.querySelectorAll('.tab').forEach(function (t) {
-        t.classList.toggle('is-active', t === btn);
-      });
-      document.querySelectorAll('.tabpanel').forEach(function (p) {
-        p.classList.toggle('is-active', p.getAttribute('data-panel') === key);
-      });
+      if (btn) selectTab(btn.getAttribute('data-tab'), false);
+    });
+    tablist.addEventListener('keydown', function (ev) {
+      if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight' && ev.key !== 'Home' && ev.key !== 'End') return;
+      var tabs = tablist.querySelectorAll('.tab');
+      var n = tabs.length, cur = 0;
+      for (var i = 0; i < n; i++) { if (tabs[i].getAttribute('aria-selected') === 'true') { cur = i; break; } }
+      var next = cur;
+      if (ev.key === 'ArrowLeft') next = (cur - 1 + n) % n;
+      else if (ev.key === 'ArrowRight') next = (cur + 1) % n;
+      else if (ev.key === 'Home') next = 0;
+      else if (ev.key === 'End') next = n - 1;
+      ev.preventDefault();
+      selectTab(tabs[next].getAttribute('data-tab'), true);
     });
 
     /* テンプレート */

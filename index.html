@@ -50,13 +50,13 @@
 
         <label class="field">
           <span class="field__label field__label--req">商品名</span>
-          <textarea class="control" rows="2" data-path="name.text" placeholder="例）北海道産 生クリーム大福"></textarea>
+          <textarea class="control" rows="2" data-path="name.text" aria-required="true" placeholder="例）北海道産 生クリーム大福"></textarea>
         </label>
 
         <div class="grid grid--2">
           <label class="field">
             <span class="field__label field__label--req">価格</span>
-            <input type="text" inputmode="decimal" class="control" data-path="price.value" placeholder="例）980">
+            <input type="text" inputmode="decimal" class="control" data-path="price.value" aria-required="true" placeholder="例）980">
           </label>
           <label class="field">
             <span class="field__label">税表記</span>
@@ -118,12 +118,12 @@
       <summary class="sect__head">2. 文字の大きさ・フォント</summary>
       <div class="sect__body">
 
-        <div class="tabs" role="tablist" id="text-tabs">
-          <button type="button" class="tab is-active" role="tab" data-tab="name">商品名</button>
-          <button type="button" class="tab" role="tab" data-tab="catch">キャッチ</button>
-          <button type="button" class="tab" role="tab" data-tab="price">価格</button>
-          <button type="button" class="tab" role="tab" data-tab="desc">説明文</button>
-          <button type="button" class="tab" role="tab" data-tab="note">注記</button>
+        <div class="tabs" role="tablist" id="text-tabs" aria-label="文字設定の項目">
+          <button type="button" class="tab is-active" role="tab" id="tab-name" aria-controls="panel-name" aria-selected="true" data-tab="name">商品名</button>
+          <button type="button" class="tab" role="tab" id="tab-catch" aria-controls="panel-catch" aria-selected="false" tabindex="-1" data-tab="catch">キャッチ</button>
+          <button type="button" class="tab" role="tab" id="tab-price" aria-controls="panel-price" aria-selected="false" tabindex="-1" data-tab="price">価格</button>
+          <button type="button" class="tab" role="tab" id="tab-desc" aria-controls="panel-desc" aria-selected="false" tabindex="-1" data-tab="desc">説明文</button>
+          <button type="button" class="tab" role="tab" id="tab-note" aria-controls="panel-note" aria-selected="false" tabindex="-1" data-tab="note">注記</button>
         </div>
 
         <div class="tabpanels" id="text-panels"><!-- JSで生成 --></div>
@@ -307,11 +307,21 @@
         <input type="file" id="file-image" accept="image/*" hidden>
 
         <div id="image-controls" hidden>
-          <p class="field__hint">プレビュー上でドラッグ＝移動、四隅をドラッグ＝拡大縮小できます。</p>
+          <p class="field__hint">プレビュー上でドラッグ＝移動、四隅をドラッグ＝拡大縮小。位置X/Y・幅の数値でも調整できます。</p>
           <label class="field">
             <span class="field__label">幅 <output class="field__out" data-out="image.wMm"></output> mm</span>
             <input type="range" min="10" max="600" step="1" class="control control--range" data-path="image.wMm">
           </label>
+          <div class="grid grid--2">
+            <label class="field">
+              <span class="field__label">位置X（mm）</span>
+              <input type="number" min="-600" max="600" step="1" class="control" data-path="image.xMm">
+            </label>
+            <label class="field">
+              <span class="field__label">位置Y（mm）</span>
+              <input type="number" min="-600" max="600" step="1" class="control" data-path="image.yMm">
+            </label>
+          </div>
           <div class="grid grid--2">
             <label class="field">
               <span class="field__label">重ね順</span>
@@ -356,7 +366,7 @@
       <span class="preview__status" id="status" role="status" aria-live="polite"></span>
     </div>
     <div class="preview__stage" id="preview-stage">
-      <canvas id="canvas" class="preview__canvas"></canvas>
+      <canvas id="canvas" class="preview__canvas" role="img" aria-label="商品ポップのプレビュー"></canvas>
     </div>
     <p class="preview__note">プレビューは実際の印刷仕上がりと同じレイアウトです。</p>
   </section>

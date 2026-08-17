@@ -19,9 +19,9 @@ var POPPresets = (function () {
     { id: 'b7',      label: 'B7・JIS（91×128mm）',       w: 91,  h: 128, group: 'JIS B判' },
     { id: 'b8',      label: 'B8・JIS（64×91mm）',        w: 64,  h: 91,  group: 'JIS B判' },
     { id: 'hagaki',  label: 'はがき（100×148mm）',      w: 100, h: 148, group: 'その他定型' },
-    { id: 'meishi',  label: '名刺（91×55mm）',          w: 55,  h: 91,  group: 'その他定型' },
+    { id: 'meishi',  label: '名刺（91×55mm）',          w: 91,  h: 55,  group: 'その他定型' },
     { id: 'square',  label: '正方形（100×100mm）',      w: 100, h: 100, group: 'その他定型' },
-    { id: 'strip',   label: '短冊（210×74mm）',         w: 74,  h: 210, group: 'その他定型' },
+    { id: 'strip',   label: '短冊（210×74mm）',         w: 210, h: 74,  group: 'その他定型' },
     { id: 'custom',  label: 'カスタムサイズ',            w: 150, h: 100, group: 'カスタム' }
   ];
 
