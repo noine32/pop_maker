@@ -4,19 +4,25 @@
 var POPPresets = (function () {
   'use strict';
 
-  /* 用紙サイズ（mm・縦向きの値） */
+  /* 用紙サイズ（mm・縦向きの値）。A判/B判はいずれも日本のJIS規格寸法。
+     ISO B系列（B5=176×250 等）とは別物なので、B判ラベルに「JIS」を併記する。 */
   var PAPERS = [
-    { id: 'a4',      label: 'A4（210×297mm）',        w: 210, h: 297 },
-    { id: 'a5',      label: 'A5（148×210mm）',        w: 148, h: 210 },
-    { id: 'a6',      label: 'A6（105×148mm）',        w: 105, h: 148 },
-    { id: 'a7',      label: 'A7（74×105mm）',         w: 74,  h: 105 },
-    { id: 'b5',      label: 'B5（182×257mm）',        w: 182, h: 257 },
-    { id: 'b6',      label: 'B6（128×182mm）',        w: 128, h: 182 },
-    { id: 'hagaki',  label: 'はがき（100×148mm）',    w: 100, h: 148 },
-    { id: 'meishi',  label: '名刺（91×55mm）',        w: 55,  h: 91  },
-    { id: 'square',  label: '正方形（100×100mm）',    w: 100, h: 100 },
-    { id: 'strip',   label: '短冊（210×74mm）',       w: 74,  h: 210 },
-    { id: 'custom',  label: 'カスタムサイズ',          w: 150, h: 100 }
+    { id: 'a3',      label: 'A3（297×420mm）',          w: 297, h: 420, group: 'JIS A判' },
+    { id: 'a4',      label: 'A4（210×297mm）',          w: 210, h: 297, group: 'JIS A判' },
+    { id: 'a5',      label: 'A5（148×210mm）',          w: 148, h: 210, group: 'JIS A判' },
+    { id: 'a6',      label: 'A6（105×148mm）',          w: 105, h: 148, group: 'JIS A判' },
+    { id: 'a7',      label: 'A7（74×105mm）',           w: 74,  h: 105, group: 'JIS A判' },
+    { id: 'a8',      label: 'A8（52×74mm）',            w: 52,  h: 74,  group: 'JIS A判' },
+    { id: 'b4',      label: 'B4・JIS（257×364mm）',      w: 257, h: 364, group: 'JIS B判' },
+    { id: 'b5',      label: 'B5・JIS（182×257mm）',      w: 182, h: 257, group: 'JIS B判' },
+    { id: 'b6',      label: 'B6・JIS（128×182mm）',      w: 128, h: 182, group: 'JIS B判' },
+    { id: 'b7',      label: 'B7・JIS（91×128mm）',       w: 91,  h: 128, group: 'JIS B判' },
+    { id: 'b8',      label: 'B8・JIS（64×91mm）',        w: 64,  h: 91,  group: 'JIS B判' },
+    { id: 'hagaki',  label: 'はがき（100×148mm）',      w: 100, h: 148, group: 'その他定型' },
+    { id: 'meishi',  label: '名刺（91×55mm）',          w: 55,  h: 91,  group: 'その他定型' },
+    { id: 'square',  label: '正方形（100×100mm）',      w: 100, h: 100, group: 'その他定型' },
+    { id: 'strip',   label: '短冊（210×74mm）',         w: 74,  h: 210, group: 'その他定型' },
+    { id: 'custom',  label: 'カスタムサイズ',            w: 150, h: 100, group: 'カスタム' }
   ];
 
   var papersById = {};
@@ -142,6 +148,9 @@ var POPPresets = (function () {
       note:  { text: '', font: 'sans', size: 12, weight: 400, color: '#777777', lineHeight: 1.4 },
 
       badge: { enabled: false, text: 'おすすめ', style: 'chip', bg: '#333333', color: '#ffffff', size: 24 },
+
+      /* 商品画像/ロゴ（src が空 = 画像なし）。位置・幅は mm、高さは wMm/aspect */
+      image: { src: '', xMm: 0, yMm: 0, wMm: 0, aspect: 1, opacity: 1, layer: 'back' },
 
       design: {
         bg: '#ffffff', accent: '#333333', band: 'none',

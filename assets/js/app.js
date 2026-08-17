@@ -128,8 +128,17 @@
 
   /* ---------- 用紙・テンプレートの生成 ---------- */
   function buildPaperOptions() {
-    document.getElementById('paper-select').innerHTML = POPPresets.PAPERS.map(function (p) {
-      return '<option value="' + p.id + '">' + p.label + '</option>';
+    var groups = {}, order = [];
+    POPPresets.PAPERS.forEach(function (p) {
+      var g = p.group || 'その他';
+      if (!groups[g]) { groups[g] = []; order.push(g); }
+      groups[g].push(p);
+    });
+    document.getElementById('paper-select').innerHTML = order.map(function (g) {
+      var opts = groups[g].map(function (p) {
+        return '<option value="' + p.id + '">' + p.label + '</option>';
+      }).join('');
+      return '<optgroup label="' + g + '">' + opts + '</optgroup>';
     }).join('');
   }
 
@@ -171,10 +180,36 @@
 
     document.getElementById('custom-size').hidden = state.paper.id !== 'custom';
 
+    var imgCtl = document.getElementById('image-controls');
+    if (imgCtl) imgCtl.hidden = !(state.image && state.image.src);
+
     var tpl = document.querySelectorAll('[data-template]');
     for (var t = 0; t < tpl.length; t++) {
       tpl[t].classList.toggle('is-active', tpl[t].getAttribute('data-template') === state.template);
     }
+  }
+
+  /* ---------- 画像（読み込みキャッシュ・フォントと同じ遅延ロード方式） ---------- */
+  var imgCache = {};
+  var imgLoading = {};
+  var autosaveWarned = false;
+
+  function ensureImage(src, cb) {
+    if (!src) { if (cb) cb(null); return; }
+    if (imgCache[src]) { if (cb) cb(imgCache[src]); return; }
+    if (imgLoading[src]) return;      /* 二重ロード防止（onload 完了時に再描画される） */
+    imgLoading[src] = true;
+    var im = new Image();
+    im.onload = function () { imgCache[src] = im; delete imgLoading[src]; if (cb) cb(im); };
+    im.onerror = function () { delete imgLoading[src]; if (cb) cb(null); };
+    im.src = src;
+  }
+
+  /* 書き出し用：画像が読み込めてから assets を渡す */
+  function withAssets(cb) {
+    var src = state.image && state.image.src;
+    if (!src) { cb({ image: null }); return; }
+    ensureImage(src, function (img) { cb({ image: img }); });
   }
 
   /* ---------- 描画 ---------- */
@@ -203,7 +238,9 @@
     canvas.height = Math.round(dispH * dpr);
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    var result = POPRenderer.draw(ctx, state, canvas.width / size.w);
+    var assets = { image: (state.image && state.image.src) ? (imgCache[state.image.src] || null) : null };
+    var result = POPRenderer.draw(ctx, state, canvas.width / size.w, assets);
+    drawImageHandles(size);   /* 画像の選択枠＋四隅ハンドル（プレビューのみ・書き出しには出ない） */
 
     var paper = POPPresets.papersById[state.paper.id];
     metaEl.textContent = (paper ? paper.label.replace(/（.*/, '') : '') +
@@ -214,8 +251,21 @@
     else if (result.fontScale < 0.999) setStatus('自動縮小中（' + Math.round(result.fontScale * 100) + '%）');
     else setStatus('');
 
+    ensureImageThenRerender();
     ensureFontsThenRerender();
-    POPStorage.saveAuto(state);
+
+    var saved = POPStorage.saveAuto(state);
+    if (!saved && state.image && state.image.src && !autosaveWarned) {
+      autosaveWarned = true;
+      setStatus('画像が大きく自動保存できません。「データ保存」で書き出せます', true);
+    }
+  }
+
+  /* 画像が未ロードなら読み込んでから描き直す */
+  function ensureImageThenRerender() {
+    var src = state.image && state.image.src;
+    if (!src || imgCache[src]) return;
+    ensureImage(src, function () { requestRender(); });
   }
 
   /* 使用中のWebフォントが未読み込みなら読み込んでから描き直す */
@@ -257,28 +307,44 @@
   function exportPng() {
     var dpi = Number(document.getElementById('export-dpi').value) || 300;
     setStatus('画像を作成中…');
-    /* 描画前にフォントの読み込みを待つ */
+    /* 描画前にフォント・画像の読み込みを待つ */
     POPFonts.ensureAll(POPRenderer.usedFonts(state)).then(function () {
-      var cv = POPRenderer.renderToCanvas(state, dpi);
+     withAssets(function (assets) {
+      var cv = POPRenderer.renderToCanvas(state, dpi, assets);
       var done = function (blob) {
         POPStorage.download(blob, safeFileName() + '_' + dpi + 'dpi.png');
         setStatus('PNGを保存しました', true);
       };
-      if (cv.toBlob) cv.toBlob(function (b) { if (b) done(b); }, 'image/png');
-      else {
-        var data = cv.toDataURL('image/png').split(',')[1];
-        var bin = atob(data), arr = new Uint8Array(bin.length);
-        for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-        done(new Blob([arr], { type: 'image/png' }));
+      var fail = function () {
+        setStatus('画像を作成できませんでした。解像度を下げるか用紙を小さくしてお試しください', true);
+      };
+      /* dataURL 経由の書き出し（toBlob 非対応 or null 時のフォールバック） */
+      var viaDataUrl = function () {
+        try {
+          var data = cv.toDataURL('image/png').split(',')[1];
+          if (!data) { fail(); return; }
+          var bin = atob(data), arr = new Uint8Array(bin.length);
+          for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+          done(new Blob([arr], { type: 'image/png' }));
+        } catch (e) { fail(); }
+      };
+      if (cv.toBlob) {
+        /* 大きい用紙×高dpi では canvas 面積上限で b が null になり得る＝
+           握り潰さず dataURL にフォールバックし、それも駄目なら失敗を通知する */
+        cv.toBlob(function (b) { if (b) done(b); else viaDataUrl(); }, 'image/png');
+      } else {
+        viaDataUrl();
       }
+     });
     });
   }
 
   function printPop() {
     setStatus('印刷を準備中…');
     POPFonts.ensureAll(POPRenderer.usedFonts(state)).then(function () {
+     withAssets(function (assets) {
       var size = POPPresets.paperSize(state);
-      var url = POPRenderer.renderToCanvas(state, 300).toDataURL('image/png');
+      var url = POPRenderer.renderToCanvas(state, 300, assets).toDataURL('image/png');
 
       var frame = document.createElement('iframe');
       frame.setAttribute('aria-hidden', 'true');
@@ -312,7 +378,166 @@
       img.onload = go;
       img.onerror = go;
       img.src = url;
+     });
     });
+  }
+
+  /* ---------- 画像の配置・操作（プレビュー上でドラッグ移動／四隅リサイズ） ---------- */
+  /* 現在の状態から画像の矩形（プレビュー canvas のバッキングpx）を得る */
+  function imgRectPx(size) {
+    var im = state.image;
+    var s = canvas.width / size.w;                 /* バッキングpx / mm */
+    var w = im.wMm * s;
+    var h = (im.wMm / (im.aspect || 1)) * s;
+    return { x: (im.xMm || 0) * s, y: (im.yMm || 0) * s, w: w, h: h, s: s };
+  }
+
+  /* 選択枠＋四隅ハンドルをプレビューに重ね描き（書き出しには出さない） */
+  function drawImageHandles(size) {
+    var im = state.image;
+    if (!im || !im.src || !(im.wMm > 0)) return;
+    var r = imgRectPx(size);
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.strokeStyle = '#2b6cb0';
+    ctx.lineWidth = Math.max(1, r.s * 0.4);
+    ctx.setLineDash([r.s * 1.6, r.s * 1.2]);
+    ctx.strokeRect(r.x, r.y, r.w, r.h);
+    ctx.setLineDash([]);
+    var hs = Math.max(7, r.s * 3);                  /* ハンドル一辺（バッキングpx） */
+    [[r.x, r.y], [r.x + r.w, r.y], [r.x, r.y + r.h], [r.x + r.w, r.y + r.h]].forEach(function (c) {
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.rect(c[0] - hs / 2, c[1] - hs / 2, hs, hs);
+      ctx.fill();
+      ctx.stroke();
+    });
+    ctx.restore();
+  }
+
+  /* ポインタ座標 → mm（用紙左上基準） */
+  function eventToMm(ev) {
+    var rect = canvas.getBoundingClientRect();
+    var size = POPPresets.paperSize(state);
+    return {
+      x: (ev.clientX - rect.left) / rect.width * size.w,
+      y: (ev.clientY - rect.top) / rect.height * size.h
+    };
+  }
+
+  /* mm 座標が画像のどこに当たるか（四隅ハンドル / 内部 / 外） */
+  function imageHitTest(mm) {
+    var im = state.image;
+    if (!im || !im.src || !(im.wMm > 0)) return null;
+    var hMm = im.wMm / (im.aspect || 1);
+    var size = POPPresets.paperSize(state);
+    var tol = Math.max(size.w, size.h) * 0.035 + 2;     /* 指でも掴める余裕 */
+    var corners = {
+      tl: [im.xMm, im.yMm], tr: [im.xMm + im.wMm, im.yMm],
+      bl: [im.xMm, im.yMm + hMm], br: [im.xMm + im.wMm, im.yMm + hMm]
+    };
+    for (var key in corners) {
+      if (Math.abs(mm.x - corners[key][0]) < tol && Math.abs(mm.y - corners[key][1]) < tol) {
+        return { type: 'corner', corner: key };
+      }
+    }
+    if (mm.x >= im.xMm && mm.x <= im.xMm + im.wMm && mm.y >= im.yMm && mm.y <= im.yMm + hMm) {
+      return { type: 'inside' };
+    }
+    return null;
+  }
+
+  var imgDrag = null;
+
+  function onImagePointerDown(ev) {
+    var mm = eventToMm(ev);
+    var hit = imageHitTest(mm);
+    if (!hit) return;
+    ev.preventDefault();
+    try { canvas.setPointerCapture(ev.pointerId); } catch (e) { /* noop */ }
+    var im = state.image;
+    if (hit.type === 'corner') {
+      var hMm = im.wMm / (im.aspect || 1);
+      var left = hit.corner.indexOf('l') >= 0, top = hit.corner.indexOf('t') >= 0;
+      /* 反対側の角を固定点（anchor）にしてアスペクト維持リサイズ */
+      imgDrag = { mode: 'resize', left: left, top: top,
+                  anchor: { x: left ? im.xMm + im.wMm : im.xMm, y: top ? im.yMm + hMm : im.yMm } };
+    } else {
+      imgDrag = { mode: 'move', dx: mm.x - im.xMm, dy: mm.y - im.yMm };
+    }
+  }
+
+  function onImagePointerMove(ev) {
+    if (!imgDrag) { updateImageCursor(ev); return; }
+    ev.preventDefault();
+    var im = state.image, mm = eventToMm(ev);
+    if (imgDrag.mode === 'move') {
+      im.xMm = mm.x - imgDrag.dx;
+      im.yMm = mm.y - imgDrag.dy;
+    } else {
+      var dxMm = Math.abs(mm.x - imgDrag.anchor.x);
+      var dyMm = Math.abs(mm.y - imgDrag.anchor.y);
+      var newW = Math.max(10, Math.max(dxMm, dyMm * (im.aspect || 1)));
+      var newH = newW / (im.aspect || 1);
+      im.wMm = newW;
+      im.xMm = imgDrag.left ? imgDrag.anchor.x - newW : imgDrag.anchor.x;
+      im.yMm = imgDrag.top ? imgDrag.anchor.y - newH : imgDrag.anchor.y;
+    }
+    syncUI();
+    requestRender();
+  }
+
+  function endImageDrag(ev) {
+    if (!imgDrag) return;
+    imgDrag = null;
+    try { canvas.releasePointerCapture(ev.pointerId); } catch (e) { /* noop */ }
+    requestRender();
+  }
+
+  function updateImageCursor(ev) {
+    var hit = imageHitTest(eventToMm(ev));
+    canvas.style.cursor = !hit ? 'default'
+      : (hit.type === 'corner'
+          ? (hit.corner === 'tl' || hit.corner === 'br' ? 'nwse-resize' : 'nesw-resize')
+          : 'move');
+  }
+
+  /* 画像ファイルを取り込む（長辺2000pxに縮小して保存容量を抑える） */
+  function importImageFile(file) {
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      var im = new Image();
+      im.onload = function () {
+        var maxSide = 2000;
+        var sc = Math.min(1, maxSide / Math.max(im.naturalWidth, im.naturalHeight));
+        var cw = Math.max(1, Math.round(im.naturalWidth * sc));
+        var ch = Math.max(1, Math.round(im.naturalHeight * sc));
+        var c = document.createElement('canvas');
+        c.width = cw; c.height = ch;
+        c.getContext('2d').drawImage(im, 0, 0, cw, ch);
+        var isPng = /image\/png/i.test(file.type || '');
+        var dataUrl;
+        try { dataUrl = isPng ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', 0.9); }
+        catch (e) { setStatus('画像を読み込めませんでした', true); return; }
+        var aspect = cw / ch;
+        var size = POPPresets.paperSize(state);
+        var wMm = Math.round(size.w * 0.6);
+        state.image = {
+          src: dataUrl, aspect: aspect, wMm: wMm,
+          xMm: Math.round((size.w - wMm) / 2),
+          yMm: Math.round((size.h - wMm / aspect) / 2),
+          opacity: 1, layer: 'back'
+        };
+        autosaveWarned = false;
+        ensureImage(dataUrl, function () { syncUI(); requestRender(); });
+        setStatus('画像を追加しました', true);
+      };
+      im.onerror = function () { setStatus('画像を読み込めませんでした', true); };
+      im.src = String(reader.result);
+    };
+    reader.onerror = function () { setStatus('ファイルを読めませんでした', true); };
+    reader.readAsDataURL(file);
   }
 
   /* ---------- 保存済みデザイン ---------- */
@@ -388,6 +613,30 @@
       syncUI();
       requestRender();
     });
+
+    /* 画像：追加・削除・ファイル選択 */
+    document.getElementById('btn-image-add').addEventListener('click', function () {
+      document.getElementById('file-image').click();
+    });
+    document.getElementById('file-image').addEventListener('change', function (ev) {
+      var file = ev.target.files && ev.target.files[0];
+      importImageFile(file);
+      ev.target.value = '';
+    });
+    document.getElementById('btn-image-del').addEventListener('click', function () {
+      state.image = POPPresets.defaultState().image;
+      autosaveWarned = false;
+      canvas.style.cursor = 'default';
+      syncUI();
+      requestRender();
+      setStatus('画像を削除しました', true);
+    });
+
+    /* 画像：プレビュー上でドラッグ移動／四隅リサイズ（マウス・タッチ共通） */
+    canvas.addEventListener('pointerdown', onImagePointerDown);
+    canvas.addEventListener('pointermove', onImagePointerMove);
+    canvas.addEventListener('pointerup', endImageDrag);
+    canvas.addEventListener('pointercancel', endImageDrag);
 
     /* 書き出し */
     document.getElementById('btn-png').addEventListener('click', exportPng);

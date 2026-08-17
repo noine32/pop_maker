@@ -308,9 +308,29 @@ var POPRenderer = (function () {
   }
 
   /* --------------------------------------------------------
-     本体
+     画像（商品写真/ロゴ）
      -------------------------------------------------------- */
-  function draw(ctx, state, pxPerMm) {
+  function drawPhoto(ctx, state, img, pxPerMm) {
+    var im = state.image;
+    if (!img || !im || !im.src || !(im.wMm > 0)) return;
+    var w = im.wMm * pxPerMm;
+    var h = (im.wMm / (im.aspect || 1)) * pxPerMm;
+    var x = (im.xMm || 0) * pxPerMm;
+    var y = (im.yMm || 0) * pxPerMm;
+    ctx.save();
+    ctx.globalAlpha = (im.opacity == null ? 1 : Math.max(0, Math.min(1, im.opacity)));
+    try { ctx.drawImage(img, x, y, w, h); } catch (e) { /* 破損画像は無視 */ }
+    ctx.restore();
+  }
+
+  /* --------------------------------------------------------
+     本体
+     assets.image に読み込み済み HTMLImageElement を渡すと写真を描画する。
+     -------------------------------------------------------- */
+  function draw(ctx, state, pxPerMm, assets) {
+    assets = assets || {};
+    var photo = assets.image || null;
+    var imgLayer = (state.image && state.image.layer) || 'back';
     var size = POPPresets.paperSize(state);
     var W = size.w * pxPerMm;
     var H = size.h * pxPerMm;
@@ -319,6 +339,9 @@ var POPRenderer = (function () {
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = state.design.bg || '#ffffff';
     ctx.fillRect(0, 0, W, H);
+
+    /* 背面レイヤーの画像（テキストの後ろ） */
+    if (photo && imgLayer !== 'front') drawPhoto(ctx, state, photo, pxPerMm);
 
     var pad = state.layout.padding * pxPerMm;
     var x0 = pad;
@@ -405,6 +428,9 @@ var POPRenderer = (function () {
       if (i === layout.blocks.length - 1) { /* 最後はギャップ不要 */ }
     });
 
+    /* 前面レイヤーの画像（テキストの上・枠線の下） */
+    if (photo && imgLayer === 'front') drawPhoto(ctx, state, photo, pxPerMm);
+
     drawBorder(ctx, state, W, H, pxPerMm);
     drawBadgeOverlay(ctx, state, W, H, pxPerMm);
     ctx.restore();
@@ -412,15 +438,15 @@ var POPRenderer = (function () {
     return { w: W, h: H, fontScale: fs, overflow: layout.total > availH };
   }
 
-  /** 指定解像度でオフスクリーンに描画して canvas を返す */
-  function renderToCanvas(state, dpi) {
+  /** 指定解像度でオフスクリーンに描画して canvas を返す（assets.image で写真も描画） */
+  function renderToCanvas(state, dpi, assets) {
     var pxPerMm = dpi / 25.4;
     var size = POPPresets.paperSize(state);
     var cv = document.createElement('canvas');
     cv.width = Math.round(size.w * pxPerMm);
     cv.height = Math.round(size.h * pxPerMm);
     var ctx = cv.getContext('2d');
-    draw(ctx, state, pxPerMm);
+    draw(ctx, state, pxPerMm, assets);
     return cv;
   }
 

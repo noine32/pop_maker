@@ -18,9 +18,11 @@ var POPStorage = (function () {
 
   var ok = available();
 
+  /** @returns {boolean} 保存できたら true（容量超過などで失敗すると false） */
   function saveAuto(state) {
-    if (!ok) return;
-    try { localStorage.setItem(AUTO_KEY, JSON.stringify(state)); } catch (e) { /* 容量超過などは無視 */ }
+    if (!ok) return false;
+    try { localStorage.setItem(AUTO_KEY, JSON.stringify(state)); return true; }
+    catch (e) { return false; /* 容量超過（大きな画像など）は握り潰す */ }
   }
 
   function loadAuto() {
