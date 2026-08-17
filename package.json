@@ -1,0 +1,9 @@
+{
+  "name": "pop-maker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "商品ポップメーカー（依存ライブラリなしの素の HTML/CSS/JS）",
+  "scripts": {
+    "test": "node test/run.js"
+  }
+}
