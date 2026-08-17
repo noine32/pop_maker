@@ -40,6 +40,9 @@
   function mergeDeep(base, patch) {
     if (!patch || typeof patch !== 'object') return base;
     Object.keys(patch).forEach(function (k) {
+      /* プロトタイプ汚染対策：JSON.parse は __proto__ を列挙可能キーとして作るため、
+         base["__proto__"](=Object.prototype)への書き込みを防ぐ。 */
+      if (k === '__proto__' || k === 'constructor' || k === 'prototype') return;
       var v = patch[k];
       var baseIsObj = base[k] && typeof base[k] === 'object' && !Array.isArray(base[k]);
       var vIsObj = v && typeof v === 'object' && !Array.isArray(v);
