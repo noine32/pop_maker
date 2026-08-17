@@ -245,18 +245,24 @@ var POPRenderer = (function () {
     var sizePx = ptPx(b.size, pxPerMm, 1);
 
     if (b.style === 'ribbon') {
-      var band = sizePx * 2.0;
-      var len = Math.min(W, H) * 0.75;
+      /* 右上角の斜めリボン。角(W,0)を原点に45°回転し、そこから内側へ inset だけ
+         ずらした位置に帯の中心を置く。ずらさないと帯と文字が角の外側へはみ出し、
+         用紙に残るのは角の三角形だけ＝文字がほぼ見えなくなる（旧実装のバグ）。
+         帯は用紙の上辺・右辺の外まで伸ばし、はみ出しはクリップさせて角リボンにする。 */
+      var band = sizePx * 1.7;                       /* 帯の太さ */
+      var len = Math.min(W, H) * 1.0;                /* 帯の長さ（両端は用紙外へ） */
+      var inset = band * 1.5 + Math.min(W, H) * 0.04; /* 角から内側への距離 */
       ctx.save();
       ctx.translate(W, 0);
       ctx.rotate(Math.PI / 4);
+      ctx.translate(0, inset);                        /* 角の内側へ帯を移動 */
       ctx.fillStyle = b.bg;
-      ctx.fillRect(-len / 2, -band * 0.2, len, band * 0.8);
+      ctx.fillRect(-len / 2, -band / 2, len, band);
       ctx.font = POPFonts.cssFont('sans', 700, sizePx);
       ctx.fillStyle = b.color;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(text, 0, -band * 0.2 + band * 0.4);
+      ctx.fillText(text, 0, 0);                       /* 帯の中央に文字 */
       ctx.restore();
     } else if (b.style === 'circle') {
       ctx.font = POPFonts.cssFont('sans', 700, sizePx);
