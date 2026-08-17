@@ -8,9 +8,11 @@ var POPRenderer = (function () {
 
   var PT_TO_MM = 25.4 / 72;
 
-  /* pt → px */
+  /* pt → px（不正な数値サイズでも文字が消えないよう既定12ptに丸める） */
   function ptPx(pt, pxPerMm, scale) {
-    return Math.max(1, Number(pt) * PT_TO_MM * pxPerMm * (scale || 1));
+    var n = Number(pt);
+    if (!isFinite(n)) n = 12;
+    return Math.max(1, n * PT_TO_MM * pxPerMm * (scale || 1));
   }
 
   /* 角丸パス（ctx.roundRect が無い環境向けの実装） */
@@ -121,9 +123,13 @@ var POPRenderer = (function () {
       built = segs(k);
     }
 
-    /* 高さは実際の文字の上下端から求める（数字は大きいので見た目に効く） */
+    /* 高さは実際の文字の上下端から求める（数字は大きいので見た目に効く）。
+       actualBoundingBox は現在の textBaseline を基準に測るため、
+       描画時と同じ 'alphabetic' に揃えてから測る（そろえないと帯つきテンプレで
+       直前の 'middle' が残り、上端を半分しか確保できず商品名に重なる）。 */
     var asc = mainPx * k * 0.72, dsc = mainPx * k * 0.06;
     if (main) {
+      ctx.textBaseline = 'alphabetic';
       ctx.font = POPFonts.cssFont(p.font, p.weight, mainPx * k);
       var m = ctx.measureText(main);
       if (m.actualBoundingBoxAscent) asc = m.actualBoundingBoxAscent;

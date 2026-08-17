@@ -40,6 +40,35 @@ var POPText = (function () {
     return tokens;
   }
 
+  /* 文字列をコードポイント単位（サロゲートペア対応）で maxWidth に収まる
+     チャンク列へ強制分割する最終手段。禁則は考慮しない。 */
+  function hardSplit(ctx, s, maxWidth) {
+    var chars = Array.from(s);
+    var chunks = [];
+    var cur = '';
+    for (var i = 0; i < chars.length; i++) {
+      if (cur !== '' && ctx.measureText(cur + chars[i]).width > maxWidth) {
+        chunks.push(cur);
+        cur = chars[i];
+      } else {
+        cur += chars[i];
+      }
+    }
+    if (cur !== '') chunks.push(cur);
+    return chunks.length ? chunks : [s];
+  }
+
+  /* 確定行を push。幅超過なら hardSplit してから push（行頭・行末どちらの
+     長い連続文字列でも用紙外にはみ出さない）。 */
+  function pushLine(out, ctx, s, maxWidth) {
+    if (s === '' || maxWidth <= 0 || ctx.measureText(s).width <= maxWidth) {
+      out.push(s);
+      return;
+    }
+    var chunks = hardSplit(ctx, s, maxWidth);
+    for (var i = 0; i < chunks.length; i++) out.push(chunks[i]);
+  }
+
   /**
    * テキストを maxWidth に収まるように折り返す。
    * @param {CanvasRenderingContext2D} ctx  fontを設定済みのコンテキスト
@@ -79,23 +108,23 @@ var POPText = (function () {
 
         /* 行頭禁則：次行の先頭が「、」などになるならぶら下げる */
         if (moved === '' && t.length === 1 && isNoStart(t)) {
-          out.push(head + t);
+          pushLine(out, ctx, head + t, maxWidth);
           line = '';
           continue;
         }
 
-        out.push(head);
+        pushLine(out, ctx, head, maxWidth);
         line = moved + t;
 
-        /* 1トークンだけで幅を超える場合は強制的に分割する */
-        while (ctx.measureText(line).width > maxWidth && line.length > 1) {
-          var cut = line.length - 1;
-          while (cut > 1 && ctx.measureText(line.slice(0, cut)).width > maxWidth) cut--;
-          out.push(line.slice(0, cut));
-          line = line.slice(cut);
+        /* 1トークンだけで幅を超える場合は強制的に分割し、最後のチャンクだけ
+           次行として引き継ぐ（サロゲートペア対応の hardSplit を使用）。 */
+        if (ctx.measureText(line).width > maxWidth && Array.from(line).length > 1) {
+          var chunks = hardSplit(ctx, line, maxWidth);
+          for (var c = 0; c < chunks.length - 1; c++) out.push(chunks[c]);
+          line = chunks[chunks.length - 1];
         }
       }
-      out.push(line);
+      pushLine(out, ctx, line, maxWidth);
     });
 
     return out;

@@ -34,15 +34,21 @@
     cur[keys[keys.length - 1]] = value;
   }
 
-  /* 既定値に読み込んだデータを重ねる（項目が欠けていても壊れないように） */
+  /* 既定値に読み込んだデータを重ねる（項目が欠けていても壊れないように）。
+     不正な JSON（セクションが null / 型違いのスカラー）でも既定オブジェクトを
+     壊さない＝以後の描画クラッシュ・操作不能を防ぐ。 */
   function mergeDeep(base, patch) {
     if (!patch || typeof patch !== 'object') return base;
     Object.keys(patch).forEach(function (k) {
       var v = patch[k];
-      if (v && typeof v === 'object' && !Array.isArray(v) &&
-          base[k] && typeof base[k] === 'object' && !Array.isArray(base[k])) {
+      var baseIsObj = base[k] && typeof base[k] === 'object' && !Array.isArray(base[k]);
+      var vIsObj = v && typeof v === 'object' && !Array.isArray(v);
+      if (vIsObj && baseIsObj) {
         mergeDeep(base[k], v);
-      } else if (v !== undefined) {
+      } else if (baseIsObj) {
+        /* 既定がオブジェクトの枠は null・スカラーで上書きしない（既定を維持） */
+        return;
+      } else if (v !== undefined && v !== null) {
         base[k] = v;
       }
     });
@@ -422,7 +428,9 @@
     /* 名前を付けて保存 */
     document.getElementById('btn-preset-save').addEventListener('click', function () {
       var input = document.getElementById('preset-name');
-      var name = input.value.trim() || (state.name.text || '無題').slice(0, 20);
+      /* 改行・連続空白を1つに正規化（HTML属性値の空白正規化で読込/削除がズレるのを防ぐ） */
+      var fallback = String(state.name.text || '').replace(/\s+/g, ' ').trim().slice(0, 20);
+      var name = input.value.replace(/\s+/g, ' ').trim() || fallback || '無題';
       POPStorage.savePreset(name, JSON.parse(JSON.stringify(state)));
       input.value = '';
       renderPresetList();
