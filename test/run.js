@@ -14,6 +14,9 @@ function read(f) { return fs.readFileSync(path.join(ROOT, f), 'utf8'); }
 /* --- POPText（純粋・DOM非依存）をそのまま読み込む --- */
 eval(read('assets/js/text.js'));            // defines POPText
 
+/* --- POPImposition（純粋・DOM非依存）をそのまま読み込む --- */
+eval(read('assets/js/imposition.js'));      // defines POPImposition
+
 /* --- app.js から mergeDeep を抽出して読み込む --- */
 var appSrc = read('assets/js/app.js');
 var mdMatch = appSrc.match(/function mergeDeep\(base, patch\) \{[\s\S]*?\n  \}/);
@@ -111,6 +114,95 @@ test('parseValue: weight の SELECT は数値', function () {
 });
 test('parseValue: テキストはそのまま', function () {
   assert.strictEqual(parseValue({ type: 'text', value: '時価' }), '時価');
+});
+
+/* ---------- POPImposition（面付け計算） ---------- */
+function lay(o) {
+  return POPImposition.computeLayout({
+    sheetW: o.sheetW, sheetH: o.sheetH,
+    cardW: o.cardW, cardH: o.cardH,
+    margin: o.margin, gap: o.gap || 0,
+    allowRotate: o.allowRotate !== false,
+    center: o.center !== false
+  });
+}
+
+test('面付け: A4・44×67・余白5mm → 4列×4段=16枚・回転なし', function () {
+  var L = lay({ sheetW: 210, sheetH: 297, cardW: 44, cardH: 67, margin: 5 });
+  assert.strictEqual(L.cols, 4);
+  assert.strictEqual(L.rows, 4);
+  assert.strictEqual(L.perPage, 16);
+  assert.strictEqual(L.rotate, false);
+});
+test('面付け: A4・44×67・余白0mm → 3列×6段=18枚・回転あり', function () {
+  var L = lay({ sheetW: 210, sheetH: 297, cardW: 44, cardH: 67, margin: 0 });
+  assert.strictEqual(L.cols, 3);
+  assert.strictEqual(L.rows, 6);
+  assert.strictEqual(L.perPage, 18);
+  assert.strictEqual(L.rotate, true);
+});
+test('面付け: A5・44×67・余白5mm → 2列×4段=8枚・回転あり', function () {
+  var L = lay({ sheetW: 148, sheetH: 210, cardW: 44, cardH: 67, margin: 5 });
+  assert.strictEqual(L.perPage, 8);
+  assert.strictEqual(L.rotate, true);
+});
+test('面付け: 同数なら回転しない（A3・余白5mm → 36枚）', function () {
+  var L = lay({ sheetW: 297, sheetH: 420, cardW: 44, cardH: 67, margin: 5 });
+  assert.strictEqual(L.perPage, 36);
+  assert.strictEqual(L.rotate, false);
+});
+test('面付け: 間隔2mm・A4・余白5mm → 16枚', function () {
+  var L = lay({ sheetW: 210, sheetH: 297, cardW: 44, cardH: 67, margin: 5, gap: 2 });
+  assert.strictEqual(L.cols, 4);
+  assert.strictEqual(L.rows, 4);
+  assert.strictEqual(L.perPage, 16);
+});
+test('面付け: allowRotate=false なら回転しない', function () {
+  var L = lay({ sheetW: 210, sheetH: 297, cardW: 44, cardH: 67, margin: 0, allowRotate: false });
+  assert.strictEqual(L.rotate, false);
+  assert.strictEqual(L.perPage, 16);
+});
+test('面付け: カードがシートより大きいと perPage=0', function () {
+  var L = lay({ sheetW: 148, sheetH: 210, cardW: 200, cardH: 300, margin: 5 });
+  assert.strictEqual(L.perPage, 0);
+  assert.strictEqual(POPImposition.pageCount(5, L.perPage), 0);
+});
+test('面付け: 中央寄せの原点（A4・余白5mm・16枚）', function () {
+  var L = lay({ sheetW: 210, sheetH: 297, cardW: 44, cardH: 67, margin: 5 });
+  /* 内寸200×287、使用176×268 → 原点 = 5 + (200-176)/2 = 17 / 5 + (287-268)/2 = 14.5 */
+  assert.ok(Math.abs(L.originX - 17) < 1e-9, 'originX=' + L.originX);
+  assert.ok(Math.abs(L.originY - 14.5) < 1e-9, 'originY=' + L.originY);
+});
+test('面付け: center=false なら原点は余白そのもの', function () {
+  var L = lay({ sheetW: 210, sheetH: 297, cardW: 44, cardH: 67, margin: 5, center: false });
+  assert.strictEqual(L.originX, 5);
+  assert.strictEqual(L.originY, 5);
+});
+test('面付け: cellRect の列・行送り（間隔2mm）', function () {
+  var L = lay({ sheetW: 210, sheetH: 297, cardW: 44, cardH: 67, margin: 5, gap: 2, center: false });
+  var r0 = POPImposition.cellRect(L, 0);
+  var r1 = POPImposition.cellRect(L, 1);
+  var r4 = POPImposition.cellRect(L, 4);
+  assert.strictEqual(r0.x, 5);
+  assert.strictEqual(r0.y, 5);
+  assert.ok(Math.abs(r1.x - (5 + 44 + 2)) < 1e-9, 'r1.x=' + r1.x);
+  assert.strictEqual(r1.y, r0.y);
+  assert.strictEqual(r4.x, r0.x);
+  assert.ok(Math.abs(r4.y - (5 + 67 + 2)) < 1e-9, 'r4.y=' + r4.y);
+});
+test('面付け: 回転時のセル外形は幅と高さが入れ替わる', function () {
+  var L = lay({ sheetW: 210, sheetH: 297, cardW: 44, cardH: 67, margin: 0 });
+  assert.strictEqual(L.rotate, true);
+  assert.strictEqual(L.cellW, 67);
+  assert.strictEqual(L.cellH, 44);
+});
+test('pageCount: 16枚/ページ', function () {
+  assert.strictEqual(POPImposition.pageCount(1, 16), 1);
+  assert.strictEqual(POPImposition.pageCount(16, 16), 1);
+  assert.strictEqual(POPImposition.pageCount(17, 16), 2);
+  assert.strictEqual(POPImposition.pageCount(40, 16), 3);
+  assert.strictEqual(POPImposition.pageCount(0, 16), 1);
+  assert.strictEqual(POPImposition.pageCount(5, 0), 0);
 });
 
 /* ---------- POPText.wrap ---------- */
