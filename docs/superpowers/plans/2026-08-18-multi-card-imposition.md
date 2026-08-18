@@ -39,6 +39,7 @@
 | `assets/js/cards-ui.js` | カード一覧の DOM 構築とイベント（サムネイル・キーボード・並べ替え） | 新規 |
 | `assets/js/image-tool.js` | 商品画像の操作（ドラッグ・リサイズ・取り込み・読み込みキャッシュ） | 新規（`app.js` から移設） |
 | `assets/js/preset-ui.js` | 「名前を付けて保存」したデザインの一覧と操作 | 新規（`app.js` から移設） |
+| `assets/js/export-tool.js` | 出力（面付けシートの印刷・PNG保存） | 新規（`app.js` から移設・Task 9） |
 | `assets/js/presets.js` | カードサイズ表・寸法解決・比例スケール・画像クランプ・既定ドキュメント | 変更 |
 | `assets/js/renderer.js` | カード1枚の描画。`draw()` に寸法引数 `sizeMm` を追加するだけ | 変更 |
 | `assets/js/storage.js` | 自動保存キーを v2 に変更 | 変更 |
@@ -48,7 +49,7 @@
 | `test/run.js` | 面付け・寸法解決・スケール・移行のテストを追加 | 変更 |
 
 `index.html` の読み込み順は
-`fonts → text → presets → imposition → renderer → sheet-view → doc → storage → image-tool → preset-ui → cards-ui → app`。
+`fonts → text → presets → imposition → renderer → sheet-view → doc → storage → image-tool → preset-ui → export-tool → cards-ui → app`。
 
 `app.js` は現在 798 行あり、Global Constraints の 800 行に既に達している。Task 6 の時点で
 超えてしまうため、**Task 6 で画像操作とプリセットUIを切り出して減量してから**機能を足す。
@@ -2895,12 +2896,27 @@ git commit -m "feat: シートタブ（面付けプレビュー）を追加
 印刷を「面付けされたシートを全ページ」に変える。ここまでで **44×67mm を A4 に 16 枚並べて印刷**できるようになる。
 
 **Files:**
+- Create: `assets/js/export-tool.js`
 - Modify: `index.html`
 - Modify: `assets/js/app.js`
 
 **Interfaces:**
-- Consumes: `POPSheetView.renderSheetToCanvas` / `pagesOf`
-- Produces: なし（画面の動作のみ）
+- Consumes: `POPSheetView.renderSheetToCanvas` / `pagesOf`、`POPImageTool.waitForCard` / `waitForCards`、
+  `POPFonts.ensureAll`、`POPRenderer.usedFonts` / `renderToCanvas`、`POPStorage.download`
+- Produces:
+  - `POPExport.init({ getDoc, getCard, getCardSize, getPageIndex, setStatus, fileName })`
+  - `POPExport.png()` — 「PNGの対象」の選択に従って書き出す
+  - `POPExport.print()` — 面付けされたシートを全ページ印刷する
+
+### なぜ新しいファイルへ出すか
+
+`app.js` は現在 **781 行**で、Global Constraints の 800 行にほぼ達している。このタスクは
+印刷とPNG書き出しを大きく作り替える（ページごとの生成・blob URL・複数ページの待ち合わせ）ため、
+`app.js` に書くと確実に上限を超える。出力は「ドキュメントを受け取って画像とプリンタへ流す」
+という独立した責務なので、`export-tool.js` として切り出す。
+
+既存の `exportPng` / `printPop` / `safeFileName` は `app.js` から**削除**し、ボタンのハンドラは
+`POPExport.png` / `POPExport.print` を呼ぶだけにする。これで `app.js` は約 700 行に戻る。
 
 - [ ] **Step 1: `index.html` に書き出し対象の選択を追加する**
 
@@ -2920,46 +2936,137 @@ git commit -m "feat: シートタブ（面付けプレビュー）を追加
 </label>
 ```
 
-- [ ] **Step 2: 全カードのフォントを集めるヘルパを足す**
+- [ ] **Step 2: `assets/js/export-tool.js` を作る**
 
-画像の待ち合わせは `POPImageTool.waitForCard` / `waitForCards`（Task 6 で用意済み）を使う。
-フォントだけここに足す。`app.js` の `function safeFileName()` の**直前**に追加する。
+`app.js` にある `safeFileName` / `exportPng` / `printPop` をここへ移し、シート対応に作り替える。
 
 ```javascript
-  /* 全カードで使われているフォント（Webフォント読み込み用） */
+/* ===========================================================
+   出力（PNG保存・印刷）
+   ドキュメントを受け取って画像とプリンタへ流すだけの層。
+   状態は持たず、app.js から渡されたアクセサ経由で現在の状態を読む。
+   =========================================================== */
+var POPExport = (function () {
+  'use strict';
+
+  var cfg = null;   /* { getDoc, getCard, getCardSize, getPageIndex, setStatus } */
+
+  var PRINT_DPI = 300;
+  var MULTI_DOWNLOAD_INTERVAL_MS = 800;
+  var PAGES_CONFIRM_THRESHOLD = 10;
+
+  function safeFileName() {
+    var card = cfg.getCard();
+    var base = String((card.name && card.name.text) || 'pop')
+      .replace(/[\\/:*?"<>|\s\n]+/g, '_').slice(0, 40);
+    return (base || 'pop');
+  }
+
+  /* 全カードで使っているフォント（Webフォントの読み込み待ちに使う） */
   function allUsedFonts() {
     var out = [];
-    doc.cards.forEach(function (c) {
+    cfg.getDoc().cards.forEach(function (c) {
       POPRenderer.usedFonts(c).forEach(function (f) { out.push(f); });
     });
     return out;
   }
-```
 
-- [ ] **Step 3: 印刷をシート全ページに書き換える**
+  /* canvas を PNG として保存する（toBlob → dataURL のフォールバックつき） */
+  function saveCanvas(cv, filename, done) {
+    var finish = function (blob) {
+      POPStorage.download(blob, filename);
+      if (done) done(); else cfg.setStatus('PNGを保存しました', true);
+    };
+    var fail = function () {
+      cfg.setStatus('画像を作成できませんでした。解像度を下げるか用紙を小さくしてお試しください', true);
+    };
+    var viaDataUrl = function () {
+      try {
+        var data = cv.toDataURL('image/png').split(',')[1];
+        if (!data) { fail(); return; }
+        var bin = atob(data), arr = new Uint8Array(bin.length);
+        for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+        finish(new Blob([arr], { type: 'image/png' }));
+      } catch (e) { fail(); }
+    };
+    if (cv.toBlob) {
+      /* 大きい用紙×高dpi では canvas 面積上限で b が null になり得る＝
+         握り潰さず dataURL にフォールバックし、それも駄目なら失敗を通知する */
+      cv.toBlob(function (b) { if (b) finish(b); else viaDataUrl(); }, 'image/png');
+    } else {
+      viaDataUrl();
+    }
+  }
 
-`function printPop() { ... }` を**関数まるごと**次で置き換える。
+  /* ---------- PNG 保存 ---------- */
+  function png() {
+    var doc = cfg.getDoc();
+    var dpi = Number(document.getElementById('export-dpi').value) || PRINT_DPI;
+    var target = document.getElementById('export-target').value;
+    var allPages = document.getElementById('export-allpages').checked;
 
-```javascript
-  /* 印刷：面付けされたシートを全ページ、1回のダイアログで出す。
+    if (target === 'card') {
+      var card = cfg.getCard();
+      cfg.setStatus('画像を作成中…');
+      POPFonts.ensureAll(POPRenderer.usedFonts(card)).then(function () {
+        POPImageTool.waitForCard(card, function (assets) {
+          saveCanvas(POPRenderer.renderToCanvas(card, dpi, assets, cfg.getCardSize()),
+                     safeFileName() + '_' + dpi + 'dpi.png');
+        });
+      });
+      return;
+    }
+
+    var pages = POPSheetView.pagesOf(doc);
+    if (pages <= 0) { cfg.setStatus('カードがシートより大きいため書き出せません', true); return; }
+
+    cfg.setStatus('画像を作成中…');
+    POPFonts.ensureAll(allUsedFonts()).then(function () {
+      POPImageTool.waitForCards(doc.cards, function (assetsList) {
+        var targets = [];
+        if (allPages) { for (var i = 0; i < pages; i++) targets.push(i); }
+        else { targets.push(Math.max(0, Math.min(cfg.getPageIndex(), pages - 1))); }
+
+        if (targets.length > 1) {
+          cfg.setStatus('全' + targets.length + 'ページを保存します。ブラウザが' +
+                        '複数ダウンロードの許可を求めることがあります');
+        }
+        /* 連続ダウンロードはブラウザに抑止されやすいので間隔を空けて1枚ずつ出す */
+        var step = function (k) {
+          if (k >= targets.length) { cfg.setStatus('PNGを保存しました', true); return; }
+          var p = targets[k];
+          saveCanvas(POPSheetView.renderSheetToCanvas(doc, p, dpi, assetsList),
+                     safeFileName() + '_sheet' + (p + 1) + '_' + dpi + 'dpi.png',
+                     function () {
+                       setTimeout(function () { step(k + 1); }, MULTI_DOWNLOAD_INTERVAL_MS);
+                     });
+        };
+        step(0);
+      });
+    });
+  }
+
+  /* ---------- 印刷 ----------
+     面付けされたシートを全ページ、1回のダイアログで出す。
      data URL は base64 で約1.33倍に膨らみ多ページで不利なので blob URL を使い、
      ページ canvas は1枚ずつ作って参照を捨てる。 */
-  function printPop() {
+  function printSheets() {
+    var doc = cfg.getDoc();
     var pages = POPSheetView.pagesOf(doc);
-    if (pages <= 0) { setStatus('カードがシートより大きいため印刷できません', true); return; }
-    if (pages > 10 &&
+    if (pages <= 0) { cfg.setStatus('カードがシートより大きいため印刷できません', true); return; }
+    if (pages > PAGES_CONFIRM_THRESHOLD &&
         !window.confirm(pages + 'ページを印刷します。時間とメモリを消費しますが続けますか？')) {
       return;
     }
 
-    setStatus('印刷を準備中…');
+    cfg.setStatus('印刷を準備中…');
     POPFonts.ensureAll(allUsedFonts()).then(function () {
       POPImageTool.waitForCards(doc.cards, function (assetsList) {
         var sheet = POPPresets.sheetSize(doc.sheet);
         var urls = [];
 
         var makePage = function (i, done) {
-          var cv = POPSheetView.renderSheetToCanvas(doc, i, 300, assetsList);
+          var cv = POPSheetView.renderSheetToCanvas(doc, i, PRINT_DPI, assetsList);
           var push = function (url) { urls.push(url); done(); };
           if (cv.toBlob) {
             cv.toBlob(function (b) {
@@ -3012,9 +3119,9 @@ git commit -m "feat: シートタブ（面付けプレビュー）を追加
       try {
         frame.contentWindow.focus();
         frame.contentWindow.print();
-        setStatus('印刷ダイアログを開きました（全' + urls.length + 'ページ）', true);
+        cfg.setStatus('印刷ダイアログを開きました（全' + urls.length + 'ページ）', true);
       } catch (e) {
-        setStatus('印刷を開始できませんでした', true);
+        cfg.setStatus('印刷を開始できませんでした', true);
       }
       setTimeout(cleanup, 2000);
     };
@@ -3027,91 +3134,96 @@ git commit -m "feat: シートタブ（面付けプレビュー）を追加
       im.src = u;
     });
   }
-```
 
-- [ ] **Step 4: PNG 保存を対象選択つきにする**
-
-`function exportPng() { ... }` を**関数まるごと**次で置き換える。
-
-```javascript
-  function exportPng() {
-    var dpi = Number(document.getElementById('export-dpi').value) || 300;
-    var target = document.getElementById('export-target').value;
-    var allPages = document.getElementById('export-allpages').checked;
-
-    if (target === 'card') {
-      setStatus('画像を作成中…');
-      POPFonts.ensureAll(POPRenderer.usedFonts(state)).then(function () {
-        POPImageTool.waitForCard(state, function (assets) {
-          saveCanvas(POPRenderer.renderToCanvas(state, dpi, assets, cardSizeMm()),
-                     safeFileName() + '_' + dpi + 'dpi.png');
-        });
-      });
-      return;
-    }
-
-    var pages = POPSheetView.pagesOf(doc);
-    if (pages <= 0) { setStatus('カードがシートより大きいため書き出せません', true); return; }
-
-    setStatus('画像を作成中…');
-    POPFonts.ensureAll(allUsedFonts()).then(function () {
-      POPImageTool.waitForCards(doc.cards, function (assetsList) {
-        var targets = allPages ? [] : [pageIndex];
-        if (allPages) { for (var i = 0; i < pages; i++) targets.push(i); }
-        if (targets.length > 1) {
-          setStatus('全' + targets.length + 'ページを保存します。ブラウザが' +
-                    '複数ダウンロードの許可を求めることがあります');
-        }
-        /* 連続ダウンロードはブラウザに抑止されやすいので間隔を空けて1枚ずつ出す */
-        var step = function (k) {
-          if (k >= targets.length) { setStatus('PNGを保存しました', true); return; }
-          var p = targets[k];
-          saveCanvas(POPSheetView.renderSheetToCanvas(doc, p, dpi, assetsList),
-                     safeFileName() + '_sheet' + (p + 1) + '_' + dpi + 'dpi.png',
-                     function () { setTimeout(function () { step(k + 1); }, 800); });
-        };
-        step(0);
-      });
-    });
-  }
-
-  /* canvas を PNG として保存する（toBlob → dataURL のフォールバックつき） */
-  function saveCanvas(cv, filename, done) {
-    var finish = function (blob) {
-      POPStorage.download(blob, filename);
-      if (done) done(); else setStatus('PNGを保存しました', true);
-    };
-    var fail = function () {
-      setStatus('画像を作成できませんでした。解像度を下げるか用紙を小さくしてお試しください', true);
-    };
-    var viaDataUrl = function () {
-      try {
-        var data = cv.toDataURL('image/png').split(',')[1];
-        if (!data) { fail(); return; }
-        var bin = atob(data), arr = new Uint8Array(bin.length);
-        for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-        finish(new Blob([arr], { type: 'image/png' }));
-      } catch (e) { fail(); }
-    };
-    if (cv.toBlob) {
-      /* 大きい用紙×高dpi では canvas 面積上限で b が null になり得る＝
-         握り潰さず dataURL にフォールバックし、それも駄目なら失敗を通知する */
-      cv.toBlob(function (b) { if (b) finish(b); else viaDataUrl(); }, 'image/png');
-    } else {
-      viaDataUrl();
-    }
-  }
-```
-
-`bindEvents()` に、対象の切替で「全ページ」チェックの出し入れをする配線を足す。
-
-```javascript
+  function init(o) {
+    cfg = o;
+    document.getElementById('btn-png').addEventListener('click', png);
+    document.getElementById('btn-print').addEventListener('click', printSheets);
     document.getElementById('export-target').addEventListener('change', function (ev) {
       document.getElementById('export-allpages-wrap').hidden = ev.target.value !== 'sheet';
     });
+  }
+
+  return {
+    init: init,
+    png: png,
+    print: printSheets,
+    safeFileName: safeFileName
+  };
+})();
 ```
 
-- [ ] **Step 5: ブラウザで確認する**
+- [ ] **Step 3: `app.js` から出力処理を削除して委譲する**
+
+`app.js` から次を**削除**する（Step 2 で移設済み）。
+
+- `function safeFileName() { ... }`
+- `function exportPng() { ... }`
+- `function printPop() { ... }`
+- `bindEvents()` の中の `document.getElementById('btn-png').addEventListener('click', exportPng);` と
+  `document.getElementById('btn-print').addEventListener('click', printPop);` の2行
+
+`init()` の中、`POPPresetUI.init(...)` の**次**に追加する。
+
+```javascript
+    POPExport.init({
+      getDoc: function () { return doc; },
+      getCard: function () { return state; },
+      getCardSize: cardSizeMm,
+      getPageIndex: function () { return pageIndex; },
+      setStatus: setStatus
+    });
+```
+
+`btn-save-json` のハンドラが `safeFileName()` を使っているので、`POPExport.safeFileName()` に置き換える。
+
+```javascript
+      POPStorage.exportJson(doc, POPExport.safeFileName() + '.json');
+```
+
+`updateMeta()` の中にある印刷ボタンの有効・無効の切り替え
+（`document.getElementById('btn-print').disabled = !printable;`）は **`app.js` に残す**
+（画面状態の反映であり出力処理ではないため）。
+
+- [ ] **Step 3b: 画面の直接印刷でUIが写り込まないようにする（Task 8 のレビュー指摘）**
+
+`assets/css/style.css` の `@media print` ブロックに、プレビューのタブとページ送りを隠す指定を足す。
+本来の印刷は隠し iframe に別ドキュメントを書き出すのでこの CSS の影響を受けないが、
+利用者が主画面で直接 Ctrl+P したときにタブやページ送りのボタンが紙に写り込むため。
+既存の `.preview__bar` / `.preview__note` の扱いに合わせること。
+
+```css
+  .preview-tabs, .preview-pager { display: none; }
+```
+
+- [ ] **Step 4: `index.html` に読み込みを追加する**
+
+`preset-ui.js` の**次の行**に追加する。
+
+```html
+<script src="assets/js/export-tool.js"></script>
+```
+
+- [ ] **Step 5: 検証する**
+
+Run: `node test/run.js`
+Expected: `76 passed, 0 failed`
+
+Run: `node --check assets/js/export-tool.js && node --check assets/js/app.js && echo SYNTAX_OK`
+Expected: `SYNTAX_OK`
+
+Run: `wc -l assets/js/app.js assets/js/export-tool.js`
+Expected: `app.js` が **720 行未満**（出力処理を出した分だけ減っていること）
+
+Run: `grep -n "safeFileName\|exportPng\|printPop" assets/js/app.js`
+Expected: `POPExport.safeFileName()` の1件だけ
+
+Run: `grep -o "getElementById('[a-z-]*')" assets/js/export-tool.js | sort -u`
+→ 出てきた ID が**すべて `index.html` に存在する**ことを確認する（片方にしか無い ID は実行時エラーになる）。
+
+- [ ] **Step 6: ブラウザで確認する（人間が実施）**
+
+このステップは実装者ではなく人間が行う。確認項目:
 
 1. カードを 20 枚にして「印刷」を押すと、プレビューが **2 ページ**になり、
    1 ページ目に 16 枚・2 ページ目に 4 枚が並んでいる
@@ -3120,18 +3232,22 @@ git commit -m "feat: シートタブ（面付けプレビュー）を追加
 4. 「全ページを保存する」にチェックを入れると 2 枚落ちる（ブラウザの確認が出たら許可する）
 5. 「PNGの対象＝選択中のカードのみ」にすると 44×67mm 1 枚だけの PNG が落ちる
 6. 画像付きのカードを混ぜても、シート PNG に画像が出ている
+7. **印刷結果に選択中カードの青い枠が出ていない**
 
-- [ ] **Step 6: コミット**
+- [ ] **Step 7: コミット**
 
 ```bash
-git add index.html assets/js/app.js
+git add assets/js/export-tool.js assets/js/app.js index.html
 git commit -m "feat: 印刷とPNG保存をシート単位にする
 
-面付けされたシートを全ページ、1回の印刷ダイアログで出す。
-ページ画像は blob URL で渡し1枚ずつ生成して参照を捨てる
-（data URL は base64で約1.33倍に膨らみ多ページで不利なため）。
-PNGは「シート/選択中カード」を選べ、既定は現在のページ1枚。
-全ページ保存は連続ダウンロードの抑止を避けるため800ms間隔にした。"
+面付けされたシートを全ページ、1回の印刷ダイアログで出す。ページ画像は
+blob URL で渡し1枚ずつ生成して参照を捨てる（data URL は base64 で
+約1.33倍に膨らみ多ページで不利なため）。PNGは「シート/選択中カード」を
+選べ、既定は現在のページ1枚。全ページ保存は連続ダウンロードの抑止を
+避けるため800ms間隔にした。
+
+app.js が800行の上限に迫っていたため、出力処理は export-tool.js として
+切り出した。"
 ```
 
 ---
