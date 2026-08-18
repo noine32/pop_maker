@@ -324,10 +324,14 @@
     }
   }
 
-  /* 画像が未ロードなら読み込んでから描き直す */
+  /* 画像が未ロードなら読み込んでから描き直す。
+     「読み込み済みなら何もしない」ガードは必須。POPImageTool.ensure は
+     キャッシュヒット時にコールバックを同期で呼ぶため、これが無いと
+     render → ensure → requestRender → render … と毎フレーム回り続け、
+     自動保存（localStorage 書き込み）も毎フレーム走ってしまう。 */
   function ensureImageThenRerender() {
     var src = state.image && state.image.src;
-    if (!src) return;
+    if (!src || POPImageTool.isLoaded(src)) return;
     POPImageTool.ensure(src, function () { requestRender(); });
   }
 

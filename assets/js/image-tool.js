@@ -25,6 +25,13 @@ var POPImageTool = (function () {
     im.src = src;
   }
 
+  /** src が読み込み済みか。呼び出し側が「もう読み込んであるなら再描画しない」と
+      判断するために使う（ensure はキャッシュヒット時にコールバックを同期で呼ぶため、
+      無条件に再描画を要求すると無限ループになる）。 */
+  function isLoaded(src) {
+    return !!(src && cache[src]);
+  }
+
   /** 今読み込めているぶんだけを返す（待たない） */
   function assetsFor(card) {
     var src = card && card.image && card.image.src;
@@ -250,6 +257,7 @@ var POPImageTool = (function () {
   return {
     init: init,
     ensure: ensure,
+    isLoaded: isLoaded,
     assetsFor: assetsFor,
     assetsForCards: assetsForCards,
     waitForCard: waitForCard,
