@@ -567,6 +567,15 @@ test('hitTest: カード数より後ろの空きセルは -1', function () {
   assert.strictEqual(d.cards.length, 1);
   assert.strictEqual(POPSheetView.hitTest(d, 0, { x: 83, y: 48 }), -1);
 });
+test('sheetView: カードがシートより大きいときは各関数が安全に抜ける', function () {
+  var d = POPDoc.defaultDoc();
+  d.card = { id: 'custom', customW: 400, customH: 500 };   /* A4 に入らない大きさ */
+  var L = POPSheetView.layoutOf(d);
+  assert.strictEqual(L.perPage, 0);
+  assert.strictEqual(POPSheetView.pagesOf(d), 0);
+  assert.deepStrictEqual(POPSheetView.cardIndexesOnPage(d, 0), []);
+  assert.strictEqual(POPSheetView.hitTest(d, 0, { x: 10, y: 10 }), -1);
+});
 
 /* ---------- POPText.wrap ---------- */
 test('wrap: 長い連続語が全行 maxWidth 以内', function () {

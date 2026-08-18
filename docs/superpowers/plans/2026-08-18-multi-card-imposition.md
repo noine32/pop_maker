@@ -1381,35 +1381,22 @@ var POPSheetView = (function () {
     return -1;
   }
 
-  /* カット線。gap=0 のときは隣接カードで境界を共有するので格子状に1本ずつ、
-     gap>0 のときは各セルの外周へ引く。いずれもブロックの外周にも引く。 */
-  function drawCutLines(ctx, layout, pxPerMm) {
-    var lw = Math.max(1, CUT_LINE_MM * pxPerMm);
+  /* カット線。そのページに実際に載っているカードのぶんだけ引く。
+     グリッド全体（perPage）ぶん引くと、最終ページの余った部分にまで
+     格子が印刷されてしまうため。
+     gap=0 のときは隣接カードが境界を共有し同じ線を2回なぞることになるが、
+     不透明な細線なので見た目は変わらない（空セルに線を出さない方を優先する）。 */
+  function drawCutLines(ctx, layout, count, pxPerMm) {
+    if (!(count > 0)) return;
     ctx.save();
     ctx.strokeStyle = CUT_LINE_COLOR;
-    ctx.lineWidth = lw;
-    if (layout.gap === 0) {
-      var x0 = layout.originX * pxPerMm, y0 = layout.originY * pxPerMm;
-      var x1 = (layout.originX + layout.usedW) * pxPerMm;
-      var y1 = (layout.originY + layout.usedH) * pxPerMm;
-      ctx.beginPath();
-      for (var c = 0; c <= layout.cols; c++) {
-        var x = (layout.originX + c * layout.cellW) * pxPerMm;
-        ctx.moveTo(x, y0); ctx.lineTo(x, y1);
-      }
-      for (var r = 0; r <= layout.rows; r++) {
-        var y = (layout.originY + r * layout.cellH) * pxPerMm;
-        ctx.moveTo(x0, y); ctx.lineTo(x1, y);
-      }
-      ctx.stroke();
-    } else {
-      ctx.beginPath();
-      for (var i = 0; i < layout.perPage; i++) {
-        var rect = POPImposition.cellRect(layout, i);
-        ctx.rect(rect.x * pxPerMm, rect.y * pxPerMm, rect.w * pxPerMm, rect.h * pxPerMm);
-      }
-      ctx.stroke();
+    ctx.lineWidth = Math.max(1, CUT_LINE_MM * pxPerMm);
+    ctx.beginPath();
+    for (var i = 0; i < count; i++) {
+      var r = POPImposition.cellRect(layout, i);
+      ctx.rect(r.x * pxPerMm, r.y * pxPerMm, r.w * pxPerMm, r.h * pxPerMm);
     }
+    ctx.stroke();
     ctx.restore();
   }
 
@@ -1447,7 +1434,7 @@ var POPSheetView = (function () {
       ctx.restore();
     });
 
-    if (doc.sheet.cutLine) drawCutLines(ctx, L, pxPerMm);
+    if (doc.sheet.cutLine) drawCutLines(ctx, L, idxs.length, pxPerMm);
 
     /* 選択中カードの強調（プレビューのみ・書き出しには出さない） */
     if (opts.highlightIndex !== undefined && opts.highlightIndex !== null) {
@@ -1490,7 +1477,7 @@ var POPSheetView = (function () {
 - [ ] **Step 5: テストが通ることを確認する**
 
 Run: `node test/run.js`
-Expected: `75 passed, 0 failed`（Task 3 の 69 ＋ 新規 6）。
+Expected: `76 passed, 0 failed`（Task 3 の 69 ＋ 新規 7）。
 
 - [ ] **Step 6: `index.html` に読み込みを追加する**
 
@@ -2214,7 +2201,7 @@ Expected: `app.js` が **700行未満**、他の2つも 800行未満。
 - [ ] **Step 14: テストとブラウザで確認する**
 
 Run: `node test/run.js`
-Expected: `75 passed, 0 failed`（`mergeDeep` / `parseValue` の抽出が壊れていないことの確認）。
+Expected: `76 passed, 0 failed`（`mergeDeep` / `parseValue` の抽出が壊れていないことの確認）。
 
 > `test/run.js` は `app.js` から正規表現で `mergeDeep` と `parseValue` を抜き出している。
 > この2関数は `app.js` に残すこと（移設すると抽出が失敗してテストが落ちる）。
@@ -3398,7 +3385,7 @@ canvas 描画と印刷はブラウザでの目視確認になります。
 - [ ] **Step 3: 最終確認**
 
 Run: `node test/run.js`
-Expected: `75 passed, 0 failed`
+Expected: `76 passed, 0 failed`
 
 Run: `grep -rn "state.paper\|POPPresets.paperSize(state)" assets/js/app.js`
 Expected: 何も出ない

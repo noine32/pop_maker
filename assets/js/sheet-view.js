@@ -25,14 +25,19 @@ var POPSheetView = (function () {
     return POPImposition.pageCount(doc.cards.length, layoutOf(doc).perPage);
   }
 
+  /* 内部用: 計算済みの layout を受け取る版。公開版はこれを包むだけにして
+     1回の呼び出しで computeLayout が何度も走らないようにする。 */
+  function indexesOnPage(doc, pageIndex, layout) {
+    if (!(layout.perPage > 0)) return [];
+    var start = pageIndex * layout.perPage;
+    var out = [];
+    for (var i = start; i < Math.min(start + layout.perPage, doc.cards.length); i++) out.push(i);
+    return out;
+  }
+
   /** pageIndex ページに載るカードの添字の配列 */
   function cardIndexesOnPage(doc, pageIndex) {
-    var L = layoutOf(doc);
-    if (!(L.perPage > 0)) return [];
-    var start = pageIndex * L.perPage;
-    var out = [];
-    for (var i = start; i < Math.min(start + L.perPage, doc.cards.length); i++) out.push(i);
-    return out;
+    return indexesOnPage(doc, pageIndex, layoutOf(doc));
   }
 
   /** ページ内 index のセルへ移す変換（mm）。rot は 0 か 90°。 */
@@ -48,7 +53,7 @@ var POPSheetView = (function () {
   function hitTest(doc, pageIndex, mm) {
     var L = layoutOf(doc);
     if (!(L.perPage > 0)) return -1;
-    var idxs = cardIndexesOnPage(doc, pageIndex);
+    var idxs = indexesOnPage(doc, pageIndex, L);
     for (var k = 0; k < idxs.length; k++) {
       var r = POPImposition.cellRect(L, k);
       if (mm.x >= r.x && mm.x <= r.x + r.w && mm.y >= r.y && mm.y <= r.y + r.h) return idxs[k];
@@ -56,35 +61,22 @@ var POPSheetView = (function () {
     return -1;
   }
 
-  /* カット線。gap=0 のときは隣接カードで境界を共有するので格子状に1本ずつ、
-     gap>0 のときは各セルの外周へ引く。いずれもブロックの外周にも引く。 */
-  function drawCutLines(ctx, layout, pxPerMm) {
-    var lw = Math.max(1, CUT_LINE_MM * pxPerMm);
+  /* カット線。そのページに実際に載っているカードのぶんだけ引く。
+     グリッド全体（perPage）ぶん引くと、最終ページの余った部分にまで
+     格子が印刷されてしまうため。
+     gap=0 のときは隣接カードが境界を共有し同じ線を2回なぞることになるが、
+     不透明な細線なので見た目は変わらない（空セルに線を出さない方を優先する）。 */
+  function drawCutLines(ctx, layout, count, pxPerMm) {
+    if (!(count > 0)) return;
     ctx.save();
     ctx.strokeStyle = CUT_LINE_COLOR;
-    ctx.lineWidth = lw;
-    if (layout.gap === 0) {
-      var x0 = layout.originX * pxPerMm, y0 = layout.originY * pxPerMm;
-      var x1 = (layout.originX + layout.usedW) * pxPerMm;
-      var y1 = (layout.originY + layout.usedH) * pxPerMm;
-      ctx.beginPath();
-      for (var c = 0; c <= layout.cols; c++) {
-        var x = (layout.originX + c * layout.cellW) * pxPerMm;
-        ctx.moveTo(x, y0); ctx.lineTo(x, y1);
-      }
-      for (var r = 0; r <= layout.rows; r++) {
-        var y = (layout.originY + r * layout.cellH) * pxPerMm;
-        ctx.moveTo(x0, y); ctx.lineTo(x1, y);
-      }
-      ctx.stroke();
-    } else {
-      ctx.beginPath();
-      for (var i = 0; i < layout.perPage; i++) {
-        var rect = POPImposition.cellRect(layout, i);
-        ctx.rect(rect.x * pxPerMm, rect.y * pxPerMm, rect.w * pxPerMm, rect.h * pxPerMm);
-      }
-      ctx.stroke();
+    ctx.lineWidth = Math.max(1, CUT_LINE_MM * pxPerMm);
+    ctx.beginPath();
+    for (var i = 0; i < count; i++) {
+      var r = POPImposition.cellRect(layout, i);
+      ctx.rect(r.x * pxPerMm, r.y * pxPerMm, r.w * pxPerMm, r.h * pxPerMm);
     }
+    ctx.stroke();
     ctx.restore();
   }
 
@@ -111,7 +103,7 @@ var POPSheetView = (function () {
     var L = layoutOf(doc);
     if (!(L.perPage > 0)) return { layout: L, drawn: 0 };
 
-    var idxs = cardIndexesOnPage(doc, pageIndex);
+    var idxs = indexesOnPage(doc, pageIndex, L);
     idxs.forEach(function (cardIndex, k) {
       var t = cellTransform(L, k);
       ctx.save();
@@ -122,7 +114,7 @@ var POPSheetView = (function () {
       ctx.restore();
     });
 
-    if (doc.sheet.cutLine) drawCutLines(ctx, L, pxPerMm);
+    if (doc.sheet.cutLine) drawCutLines(ctx, L, idxs.length, pxPerMm);
 
     /* 選択中カードの強調（プレビューのみ・書き出しには出さない） */
     if (opts.highlightIndex !== undefined && opts.highlightIndex !== null) {
