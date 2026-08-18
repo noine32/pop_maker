@@ -403,6 +403,15 @@ textarea.control { resize: vertical; line-height: 1.5; }
   .preview__canvas { box-shadow: none; }
 }
 
+/* ---------- プレビュータブ ---------- */
+.preview-tabs { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.ptab {
+  border: 1px solid #d8dde3; background: #fff; border-radius: 999px;
+  padding: 4px 14px; font-size: 12px; cursor: pointer; color: #475569;
+}
+.ptab.is-active { background: #2b6cb0; border-color: #2b6cb0; color: #fff; font-weight: 700; }
+.preview-pager { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 12px; }
+
 /* ---------- カード一覧 ---------- */
 .cards { display: flex; flex-direction: column; gap: 8px; min-width: 190px; max-width: 230px; }
 .cards__title { font-size: 13px; font-weight: 700; margin: 0; }

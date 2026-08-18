@@ -53,12 +53,13 @@ var POPCardsUI = (function () {
     var dpr = Math.min(window.devicePixelRatio || 1, 2);
     var pxPerMm = (THUMB_W * dpr) / size.w;
     var canvases = listEl.querySelectorAll('.cardrow__thumb');
+    var assetsAll = opts.getAssets ? opts.getAssets() : [];
     for (var i = 0; i < canvases.length; i++) {
       var cv = canvases[i];
       cv.width = Math.max(1, Math.round(THUMB_W * dpr));
       cv.height = Math.max(1, Math.round(size.h * pxPerMm));
       cv.style.height = Math.round(size.h * (THUMB_W / size.w)) + 'px';
-      var assets = opts.getAssets ? (opts.getAssets()[i] || { image: null }) : { image: null };
+      var assets = assetsAll[i] || { image: null };
       try {
         POPRenderer.draw(cv.getContext('2d'), doc.cards[i], pxPerMm, assets, size);
       } catch (e) { /* サムネイルの失敗で画面を止めない */ }

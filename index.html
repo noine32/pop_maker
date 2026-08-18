@@ -377,6 +377,17 @@
       <span class="preview__meta" id="preview-meta"></span>
       <span class="preview__status" id="status" role="status" aria-live="polite"></span>
     </div>
+    <div class="preview-tabs" role="tablist" aria-label="プレビューの表示">
+      <button type="button" class="ptab is-active" id="ptab-card"
+              role="tab" aria-selected="true" data-preview="card">カード</button>
+      <button type="button" class="ptab" id="ptab-sheet"
+              role="tab" aria-selected="false" data-preview="sheet">シート</button>
+      <span class="preview-pager" id="preview-pager" hidden>
+        <button type="button" class="btn btn--sm" id="btn-page-prev" aria-label="前のページ">◀</button>
+        <span id="page-label">1 / 1</span>
+        <button type="button" class="btn btn--sm" id="btn-page-next" aria-label="次のページ">▶</button>
+      </span>
+    </div>
     <div class="preview__stage" id="preview-stage">
       <canvas id="canvas" class="preview__canvas" role="img" aria-label="商品ポップのプレビュー"></canvas>
     </div>

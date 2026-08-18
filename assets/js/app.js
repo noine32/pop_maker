@@ -268,6 +268,10 @@
   }
 
   /* ---------- 描画 ---------- */
+  /* プレビューの表示モードとページ */
+  var previewMode = 'card';   /* 'card' | 'sheet' */
+  var pageIndex = 0;
+
   var rafId = null;
   var ensured = {};
 
@@ -280,7 +284,7 @@
   }
 
   function render() {
-    var size = cardSizeMm();
+    var size = previewMode === 'sheet' ? POPPresets.sheetSize(doc.sheet) : cardSizeMm();
     var stageW = Math.max(120, stage.clientWidth - 44);
     var maxH = Math.max(260, window.innerHeight - 230);
     var dispW = Math.min(stageW, maxH * (size.w / size.h), 660);
@@ -293,28 +297,20 @@
     canvas.height = Math.round(dispH * dpr);
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    var assets = POPImageTool.assetsFor(state);
-    var result = POPRenderer.draw(ctx, state, canvas.width / size.w, assets, size);
-    POPImageTool.drawHandles();   /* 画像の選択枠＋四隅ハンドル（プレビューのみ） */
+    var pxPerMm = canvas.width / size.w;
+    var result = { fontScale: 1, overflow: false };
 
-    var sheet = POPPresets.sheetSize(doc.sheet);
-    var L = POPSheetView.layoutOf(doc);
-    var pages = POPSheetView.pagesOf(doc);
-    metaEl.textContent =
-      'カード ' + size.w + '×' + size.h + 'mm / ' +
-      (L.perPage > 0 ? sheet.w + '×' + sheet.h + 'mm に ' + L.perPage + '枚' : '配置できません') +
-      ' / カード' + doc.cards.length + '枚・全' + pages + 'ページ';
+    if (previewMode === 'sheet') {
+      clampPageIndex();
+      POPSheetView.drawSheet(ctx, doc, pageIndex, pxPerMm, assetsByCard(),
+                             { highlightIndex: doc.activeIndex });
+    } else {
+      result = POPRenderer.draw(ctx, state, pxPerMm, POPImageTool.assetsFor(state), size);
+      POPImageTool.drawHandles();   /* 画像の選択枠＋四隅ハンドル（プレビューのみ） */
+    }
 
-    /* スクリーンリーダー向けに現在の内容を要約 */
-    canvas.setAttribute('aria-label',
-      '商品ポップのプレビュー：商品名「' + (String(state.name.text || '').trim() || '未入力') +
-      '」／価格 ' + (String(state.price.value || '').trim() || '未入力'));
-
-    if (result.overflow) setStatus('内容が用紙に収まりきりません。文字サイズを下げてください。');
-    else if (result.fontScale < 0.999) setStatus('自動縮小中（' + Math.round(result.fontScale * 100) + '%）');
-    else setStatus('');
-
-    ensureImageThenRerender();
+    updateMeta(result);
+    ensureImagesThenRerender();
     ensureFontsThenRerender();
 
     var saved = POPStorage.saveAuto(doc);
@@ -327,14 +323,74 @@
   }
 
   /* 画像が未ロードなら読み込んでから描き直す。
-     「読み込み済みなら何もしない」ガードは必須。POPImageTool.ensure は
-     キャッシュヒット時にコールバックを同期で呼ぶため、これが無いと
-     render → ensure → requestRender → render … と毎フレーム回り続け、
-     自動保存（localStorage 書き込み）も毎フレーム走ってしまう。 */
-  function ensureImageThenRerender() {
-    var src = state.image && state.image.src;
-    if (!src || POPImageTool.isLoaded(src)) return;
-    POPImageTool.ensure(src, function () { requestRender(); });
+     カードタブは選択中カードだけ、シートタブは「そのページに載る全カード」を対象にする。
+     シートタブで選択中カードしか見ないと、一度も選択していないカードの画像が
+     永久に読み込まれず、面付けプレビューで絵が出ないままになる。
+     読み込み済みを弾くガードは必須（POPImageTool.ensure はキャッシュヒット時に
+     コールバックを同期で呼ぶため、無条件に再描画を要求すると毎フレーム回り続ける）。 */
+  function ensureImagesThenRerender() {
+    var targets;
+    if (previewMode === 'sheet') {
+      targets = POPSheetView.cardIndexesOnPage(doc, pageIndex).map(function (i) {
+        return doc.cards[i];
+      });
+    } else {
+      targets = [state];
+    }
+    targets.forEach(function (c) {
+      var src = c && c.image && c.image.src;
+      if (!src || POPImageTool.isLoaded(src)) return;
+      POPImageTool.ensure(src, function () { refreshAll(); });
+    });
+  }
+
+  function clampPageIndex() {
+    var pages = POPSheetView.pagesOf(doc);
+    pageIndex = Math.max(0, Math.min(pageIndex, Math.max(0, pages - 1)));
+  }
+
+  /* メタ表示・警告・ページ送り・読み上げ用ラベルをまとめて更新する */
+  function updateMeta(result) {
+    var card = cardSizeMm();
+    var sheet = POPPresets.sheetSize(doc.sheet);
+    var L = POPSheetView.layoutOf(doc);
+    var pages = POPSheetView.pagesOf(doc);
+
+    metaEl.textContent =
+      'カード ' + card.w + '×' + card.h + 'mm / ' +
+      (L.perPage > 0
+        ? sheet.w + '×' + sheet.h + 'mm に ' + L.perPage + '枚' +
+          (L.rotate ? '（90°回転）' : '')
+        : '配置できません') +
+      ' / カード' + doc.cards.length + '枚・全' + pages + 'ページ';
+
+    var pager = document.getElementById('preview-pager');
+    pager.hidden = !(previewMode === 'sheet' && pages > 1);
+    document.getElementById('page-label').textContent = (pageIndex + 1) + ' / ' + Math.max(1, pages);
+    document.getElementById('btn-page-prev').disabled = pageIndex <= 0;
+    document.getElementById('btn-page-next').disabled = pageIndex >= pages - 1;
+
+    canvas.setAttribute('aria-label', previewMode === 'sheet'
+      ? 'シートのプレビュー：' + doc.cards.length + '枚のカードを' + pages + 'ページに面付け'
+      : '商品ポップのプレビュー：商品名「' +
+        (String(state.name.text || '').trim() || '未入力') +
+        '」／価格 ' + (String(state.price.value || '').trim() || '未入力'));
+
+    /* 警告は「配置できない」→「余白0mm」の順に強い方を出す */
+    if (L.perPage === 0) {
+      setStatus('カードがシートより大きいため配置できません。カードを小さくするか用紙を大きくしてください');
+    } else if (Number(doc.sheet.margin) === 0) {
+      setStatus('余白0mmです。フチなし印刷に対応したプリンタ以外では端のカードが欠けます');
+    } else if (previewMode === 'card' && result.overflow) {
+      setStatus('内容がカードに収まりきりません。文字サイズを下げてください');
+    } else if (previewMode === 'card' && result.fontScale < 0.999) {
+      setStatus('自動縮小中（' + Math.round(result.fontScale * 100) + '%）');
+    } else {
+      setStatus('');
+    }
+
+    var printable = L.perPage > 0;
+    document.getElementById('btn-print').disabled = !printable;
   }
 
   /* 使用中のWebフォントが未読み込みなら読み込んでから描き直す */
@@ -347,7 +403,7 @@
     });
     if (!pending.length) return;
     pending.forEach(function (s) { ensured[s.font + '|' + s.weight] = true; });
-    POPFonts.ensureAll(pending).then(function () { requestRender(); });
+    POPFonts.ensureAll(pending).then(function () { refreshAll(); });
   }
 
   var statusTimer = null;
@@ -598,9 +654,47 @@
       resizeTimer = setTimeout(requestRender, 120);
     });
 
+    /* プレビューのタブ切替 */
+    document.querySelector('.preview-tabs').addEventListener('click', function (ev) {
+      var btn = ev.target.closest ? ev.target.closest('[data-preview]') : null;
+      if (!btn) return;
+      previewMode = btn.getAttribute('data-preview');
+      var tabs = document.querySelectorAll('.ptab');
+      for (var i = 0; i < tabs.length; i++) {
+        var on = tabs[i] === btn;
+        tabs[i].classList.toggle('is-active', on);
+        tabs[i].setAttribute('aria-selected', on ? 'true' : 'false');
+      }
+      /* シート表示中は画像の操作を止める */
+      POPImageTool.setEnabled(previewMode === 'card');
+      requestRender();
+    });
+
+    document.getElementById('btn-page-prev').addEventListener('click', function () {
+      pageIndex = Math.max(0, pageIndex - 1);
+      requestRender();
+    });
+    document.getElementById('btn-page-next').addEventListener('click', function () {
+      pageIndex = Math.min(POPSheetView.pagesOf(doc) - 1, pageIndex + 1);
+      requestRender();
+    });
+
+    /* シート上でカードをクリックすると、そのカードを選択する */
+    canvas.addEventListener('click', function (ev) {
+      if (previewMode !== 'sheet') return;
+      var rect = canvas.getBoundingClientRect();
+      var sheet = POPPresets.sheetSize(doc.sheet);
+      var mm = {
+        x: (ev.clientX - rect.left) / rect.width * sheet.w,
+        y: (ev.clientY - rect.top) / rect.height * sheet.h
+      };
+      var i = POPSheetView.hitTest(doc, pageIndex, mm);
+      if (i >= 0) selectCard(i);
+    });
+
     /* Webフォント読み込み完了で描き直す */
     if (document.fonts && document.fonts.ready) {
-      document.fonts.ready.then(function () { requestRender(); });
+      document.fonts.ready.then(function () { refreshAll(); });
     }
   }
 
