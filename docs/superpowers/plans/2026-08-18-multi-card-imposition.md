@@ -1523,6 +1523,7 @@ git commit -m "feat: シート合成描画を追加
 - Produces:
   - `POPImageTool.init({ canvas, ctx, getCard, getCardSize, onChange, setStatus })`
   - `POPImageTool.ensure(src, cb)` — 画像を読み込んでキャッシュ（`cb(HTMLImageElement|null)`）
+  - `POPImageTool.isLoaded(src) -> boolean` — 読み込み済みか（再描画の無限ループを防ぐガード用）
   - `POPImageTool.assetsFor(cardState) -> { image }`
   - `POPImageTool.assetsForCards(cards) -> [{ image }]`
   - `POPImageTool.waitForCard(cardState, cb)` / `POPImageTool.waitForCards(cards, cb)`
@@ -1999,11 +2000,26 @@ var POPPresetUI = (function () {
 `render()` の `ensureImageThenRerender()` を次で置き換える。
 
 ```javascript
-  /* 画像が未ロードなら読み込んでから描き直す */
+  /* 画像が未ロードなら読み込んでから描き直す。
+     「読み込み済みなら何もしない」ガードは必須。POPImageTool.ensure は
+     キャッシュヒット時にコールバックを同期で呼ぶため、これが無いと
+     render → ensure → requestRender → render … と毎フレーム回り続け、
+     自動保存（localStorage 書き込み）も毎フレーム走ってしまう。 */
   function ensureImageThenRerender() {
     var src = state.image && state.image.src;
-    if (!src) return;
+    if (!src || POPImageTool.isLoaded(src)) return;
     POPImageTool.ensure(src, function () { requestRender(); });
+  }
+```
+
+`image-tool.js` 側には読み込み済み判定を用意する（`assetsFor` の直前）。
+
+```javascript
+  /** src が読み込み済みか。呼び出し側が「もう読み込んであるなら再描画しない」と
+      判断するために使う（ensure はキャッシュヒット時にコールバックを同期で呼ぶため、
+      無条件に再描画を要求すると無限ループになる）。 */
+  function isLoaded(src) {
+    return !!(src && cache[src]);
   }
 ```
 
@@ -2665,7 +2681,7 @@ git commit -m "feat: カード一覧UIを追加
     }
 
     updateMeta(result);
-    ensureImageThenRerender();
+    ensureImagesThenRerender();
     ensureFontsThenRerender();
 
     var saved = POPStorage.saveAuto(doc);
@@ -2675,6 +2691,28 @@ git commit -m "feat: カード一覧UIを追加
       setStatus('カード' + doc.cards.length + '枚・画像' + imgCount +
                 '点のため自動保存できません。「データ保存」で書き出せます', true);
     }
+  }
+
+  /* 画像が未ロードなら読み込んでから描き直す。
+     カードタブは選択中カードだけ、シートタブは「そのページに載る全カード」を対象にする。
+     シートタブで選択中カードしか見ないと、一度も選択していないカードの画像が
+     永久に読み込まれず、面付けプレビューで絵が出ないままになる。
+     読み込み済みを弾くガードは必須（POPImageTool.ensure はキャッシュヒット時に
+     コールバックを同期で呼ぶため、無条件に再描画を要求すると毎フレーム回り続ける）。 */
+  function ensureImagesThenRerender() {
+    var targets;
+    if (previewMode === 'sheet') {
+      targets = POPSheetView.cardIndexesOnPage(doc, pageIndex).map(function (i) {
+        return doc.cards[i];
+      });
+    } else {
+      targets = [state];
+    }
+    targets.forEach(function (c) {
+      var src = c && c.image && c.image.src;
+      if (!src || POPImageTool.isLoaded(src)) return;
+      POPImageTool.ensure(src, function () { requestRender(); });
+    });
   }
 
   function clampPageIndex() {
@@ -2728,7 +2766,8 @@ git commit -m "feat: カード一覧UIを追加
 ```
 
 `render()` の下にあった旧メタ表示・`aria-label`・`setStatus` のコードは削除する
-（`updateMeta` に移した）。
+（`updateMeta` に移した）。Task 6 で作った `ensureImageThenRerender()` は
+`ensureImagesThenRerender()` に置き換える（シートタブではそのページの全カードの画像が要るため）。
 
 - [ ] **Step 4: タブとページ送り・シート上のクリック選択を配線する**
 
