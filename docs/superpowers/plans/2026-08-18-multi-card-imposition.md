@@ -3267,11 +3267,33 @@ app.js が800行の上限に迫っていたため、出力処理は export-tool.
 
 - [ ] **Step 1: `index.html` の用紙セクションを差し替える**
 
-既存の「用紙サイズ」まわり（`#paper-select`・`#custom-size`・向きの `<select>` を含むセクション）を、次の**2つのセクション**で置き換える。既存の `data-path="paper.*"` は 1 つも残さないこと。
+既存の「3. 用紙とレイアウト」セクション（`#paper-select`・`#custom-size`・向きの `<select>` を含む）を、
+**3つの独立した `<details class="sect">`** に分割する。既存の `data-path="paper.*"` は 1 つも残さないこと。
+
+**マークアップはこのプロジェクトの既存パターンに合わせる**（`index.html` の「1. 内容を入力」等と同じ）:
 
 ```html
-<section class="section">
-  <h2 class="section__title">カードの大きさ</h2>
+<details class="sect" open>
+  <summary class="sect__head">見出し</summary>
+  <div class="sect__body"> ...中身... </div>
+</details>
+```
+
+`.section` / `.section__title` のような新しいクラスを発明しないこと（CSS が無く見た目が崩れる）。
+カードの大きさと印刷シートはこの改修の主役の設定なので **`open` を付けて既定で展開**し、
+レイアウトは従来どおり閉じた状態にする。セクションが増えるので**以降の見出し番号を振り直す**
+（`4. デザイン・色` → `6.`、`5. 画像` → `7.`、`6. デザインの保存` → `8.`）。
+
+分割後の並び:
+
+- `3. カードの大きさ`（`open`）
+- `4. 印刷シート`（`open`）
+- `5. レイアウト`（閉じたまま。文字揃え・縦の配置・余白・要素の間隔・区切り線）
+
+各セクションの中身は次のとおり。
+
+```html
+<!-- 3. カードの大きさ の sect__body の中身 -->
   <label class="field">
     <span>プリセット</span>
     <select id="card-select" data-doc-path="card.id"></select>
@@ -3291,10 +3313,8 @@ app.js が800行の上限に迫っていたため、出力処理は export-tool.
     <span>文字とレイアウトも比例させる</span>
   </label>
   <p class="hint">サイズ変更は元の値を書き換えます。元に戻したいときはテンプレートを選び直してください。</p>
-</section>
 
-<section class="section">
-  <h2 class="section__title">印刷シート</h2>
+<!-- 4. 印刷シート の sect__body の中身 -->
   <label class="field">
     <span>用紙</span>
     <select id="paper-select" data-doc-path="sheet.id"></select>
@@ -3339,7 +3359,6 @@ app.js が800行の上限に迫っていたため、出力処理は export-tool.
     <span>カット線を入れる</span>
   </label>
   <p class="hint">安全余白を 0mm にすると枚数は増えますが、フチなし印刷に対応したプリンタ以外では端が欠けます。</p>
-</section>
 ```
 
 テンプレート一覧（`#template-list`）の**直後**に、一括適用ボタンを追加する。
