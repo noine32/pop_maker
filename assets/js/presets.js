@@ -175,6 +175,164 @@ var POPPresets = (function () {
     return s;
   }
 
+  /* ===========================================================
+     カードサイズ（ポップ1枚の大きさ）
+     カードは orientation を持たない。幅と高さの数値がそのまま寸法（設計 §4.1）。
+     向き切替を用意すると「縦横比の反転で文字が縮む」経路ができてしまうため。
+     =========================================================== */
+  var CARD_SIZES = [
+    { id: 'c44x67', label: '44×67mm',           w: 44,  h: 67 },
+    { id: 'meishi', label: '名刺（91×55mm）',    w: 91,  h: 55 },
+    { id: 'a8',     label: 'A8（52×74mm）',      w: 52,  h: 74 },
+    { id: 'a7',     label: 'A7（74×105mm）',     w: 74,  h: 105 },
+    { id: 'b8',     label: 'B8・JIS（64×91mm）', w: 64,  h: 91 },
+    { id: 'sq50',   label: '正方形（50×50mm）',  w: 50,  h: 50 },
+    { id: 'custom', label: 'カスタム（mm指定）', w: 44,  h: 67 }
+  ];
+
+  var cardSizesById = {};
+  CARD_SIZES.forEach(function (c) { cardSizesById[c.id] = c; });
+
+  var CARD_MIN_MM = 10;
+
+  function num(v, fallback) {
+    var n = Number(v);
+    return isFinite(n) ? n : fallback;
+  }
+
+  function r1(n) { return Math.round(n * 10) / 10; }
+
+  /** カードの実寸（mm）。id が custom のときだけ customW/H を見る。 */
+  function cardSize(card) {
+    card = card || {};
+    var p = cardSizesById[card.id] || cardSizesById.c44x67;
+    /* id が custom で、かつ両方とも有効な値のときだけ customW/H を使う。
+       どちらか無効なら既定値に戻す＝不正な input の復帰経路を用意する */
+    if (p.id === 'custom') {
+      var cw = card && card.customW;
+      var ch = card && card.customH;
+      var wNum = Number(cw);
+      var hNum = Number(ch);
+      if (isFinite(wNum) && isFinite(hNum)) {
+        return { w: Math.max(CARD_MIN_MM, wNum), h: Math.max(CARD_MIN_MM, hNum) };
+      }
+    }
+    return { w: p.w, h: p.h };
+  }
+
+  /** シートの実寸（mm）。用紙は向き（縦/横）を持つ。 */
+  function sheetSize(sheet) {
+    sheet = sheet || {};
+    var p = papersById[sheet.id] || papersById.a4;
+    var w = p.id === 'custom' ? num(sheet.customW, 210) : p.w;
+    var h = p.id === 'custom' ? num(sheet.customH, 297) : p.h;
+    if (sheet.orientation === 'landscape') { var t = w; w = h; h = t; }
+    return { w: w, h: h };
+  }
+
+  /** 安全余白を引いたシート内寸＝カードが入る最大の大きさ */
+  function sheetInner(sheet) {
+    var s = sheetSize(sheet);
+    var m = Math.max(0, Math.min(30, num(sheet && sheet.margin, 5)));
+    return { w: Math.max(0, s.w - m * 2), h: Math.max(0, s.h - m * 2) };
+  }
+
+  /** カスタムカードの入力値を 10mm〜シート内寸へ丸める */
+  function clampCustomCard(card, sheet) {
+    var inner = sheetInner(sheet);
+    var maxW = Math.max(CARD_MIN_MM, inner.w);
+    var maxH = Math.max(CARD_MIN_MM, inner.h);
+    return {
+      customW: r1(Math.max(CARD_MIN_MM, Math.min(num(card && card.customW, 44), maxW))),
+      customH: r1(Math.max(CARD_MIN_MM, Math.min(num(card && card.customH, 67), maxH)))
+    };
+  }
+
+  /* ---------- 比例スケール ----------
+     テンプレートの数値は A4(210×297) を前提に作られているため、44×67mm の
+     カードにそのまま乗せると余白だけで潰れる。係数を値へ焼き込む方式にして、
+     適用後にユーザーが個別の数値を手で直せるようにする。 */
+
+  /** 旧寸法→新寸法の係数。縦横の入れ替えだけなら 1（面積が同じなのに縮めない）。 */
+  function scaleFor(oldW, oldH, newW, newH) {
+    if (oldW === newH && oldH === newW) return 1;
+    return Math.min(newW / oldW, newH / oldH);
+  }
+
+  var SCALE_TEXT_KEYS = ['catch', 'name', 'price', 'desc', 'note'];
+
+  /** 対象キーが「実在するときだけ」スケールする。
+      テンプレートの差分オブジェクト（一部のキーしか持たない）にも安全に使えるようにするため、
+      未指定のキーを新たに作らない。 */
+  function scaleProp(obj, key, scale, min) {
+    if (!obj || obj[key] === undefined || obj[key] === null) return;
+    var n = Number(obj[key]);
+    if (!isFinite(n)) return;
+    obj[key] = Math.max(min, r1(n * scale));
+  }
+
+  /** カードの pt・余白・画像を破壊的にスケールする。sizeMm は新しいカード寸法。 */
+  function scaleCard(card, scale, sizeMm) {
+    if (!card || !isFinite(scale) || scale === 1) return card;
+
+    SCALE_TEXT_KEYS.forEach(function (k) { scaleProp(card[k], 'size', scale, 4); });
+    scaleProp(card.badge, 'size', scale, 4);
+
+    scaleProp(card.layout, 'padding', scale, 0);
+    scaleProp(card.layout, 'gap', scale, 0);
+
+    /* 枠線も比例させる。不変にすると小さいカードで相対的に太くなりすぎるため。
+       細くなりすぎる側は 0.3mm（300dpiで約3.5px＝印刷で視認できる）で止める。 */
+    if (card.design) scaleProp(card.design.border, 'width', scale, 0.3);
+
+    if (card.image && card.image.src) {
+      scaleProp(card.image, 'wMm', scale, 10);
+      card.image.xMm = r1(num(card.image.xMm, 0) * scale);
+      card.image.yMm = r1(num(card.image.yMm, 0) * scale);
+      if (sizeMm) clampImage(card.image, sizeMm);
+    }
+    return card;
+  }
+
+  /* ---------- 画像の配置クランプ（旧 app.js から移設） ----------
+     ブリード（端の外へ少しはみ出す）は許容しつつ、各辺に最低 keep mm は
+     カード内へ残す＝掴めなくなって復帰できない状態を防ぐ。 */
+  function clampImage(im, sizeMm) {
+    if (!im || !im.src) return im;
+    im.wMm = Math.max(10, Math.min(600, num(im.wMm, 10)));
+    var hMm = im.wMm / (num(im.aspect, 1) || 1);
+    var keep = Math.min(20, im.wMm, hMm);
+    im.xMm = Math.max(keep - im.wMm, Math.min(sizeMm.w - keep, num(im.xMm, 0)));
+    im.yMm = Math.max(keep - hMm, Math.min(sizeMm.h - keep, num(im.yMm, 0)));
+    return im;
+  }
+
+  /** 画像取り込み時の最大辺(px)。カード長辺 × 12px/mm ≒ 300dpi。
+      小さいカードで 2000px を持つのは保存容量の無駄なので連動させる。 */
+  function imageMaxSide(sizeMm) {
+    var px = Math.round(Math.max(sizeMm.w, sizeMm.h) * 12);
+    return Math.max(800, Math.min(2000, px));
+  }
+
+  /* ---------- 既定値 ---------- */
+  /** カード1枚ぶんの既定状態。用紙(paper)は持たない＝大きさは doc.card 側（設計 §4.1）。 */
+  function defaultCardState() {
+    var s = defaultState();
+    delete s.paper;
+    return s;
+  }
+
+  function defaultCard() {
+    return { id: 'c44x67', customW: 44, customH: 67 };
+  }
+
+  function defaultSheet() {
+    return {
+      id: 'a4', orientation: 'portrait', customW: 210, customH: 297,
+      margin: 5, gap: 0, allowRotate: true, center: true, cutLine: true
+    };
+  }
+
   return {
     PAPERS: PAPERS,
     papersById: papersById,
@@ -182,6 +340,21 @@ var POPPresets = (function () {
     TEMPLATES: TEMPLATES,
     templatesById: templatesById,
     defaultState: defaultState,
-    sampleState: sampleState
+    defaultCardState: defaultCardState,
+    sampleState: sampleState,
+
+    CARD_SIZES: CARD_SIZES,
+    cardSizesById: cardSizesById,
+    CARD_MIN_MM: CARD_MIN_MM,
+    cardSize: cardSize,
+    sheetSize: sheetSize,
+    sheetInner: sheetInner,
+    clampCustomCard: clampCustomCard,
+    scaleFor: scaleFor,
+    scaleCard: scaleCard,
+    clampImage: clampImage,
+    imageMaxSide: imageMaxSide,
+    defaultCard: defaultCard,
+    defaultSheet: defaultSheet
   };
 })();

@@ -17,6 +17,9 @@ eval(read('assets/js/text.js'));            // defines POPText
 /* --- POPImposition（純粋・DOM非依存）をそのまま読み込む --- */
 eval(read('assets/js/imposition.js'));      // defines POPImposition
 
+/* --- POPPresets（純粋・DOM非依存）をそのまま読み込む --- */
+eval(read('assets/js/presets.js'));         // defines POPPresets
+
 /* --- app.js から mergeDeep を抽出して読み込む --- */
 var appSrc = read('assets/js/app.js');
 var mdMatch = appSrc.match(/function mergeDeep\(base, patch\) \{[\s\S]*?\n  \}/);
@@ -203,6 +206,118 @@ test('pageCount: 16枚/ページ', function () {
   assert.strictEqual(POPImposition.pageCount(40, 16), 3);
   assert.strictEqual(POPImposition.pageCount(0, 16), 1);
   assert.strictEqual(POPImposition.pageCount(5, 0), 0);
+});
+
+/* ---------- POPPresets（寸法解決・スケール） ---------- */
+test('cardSize: プリセットはそのままの寸法（orientation を見ない）', function () {
+  assert.deepStrictEqual(POPPresets.cardSize({ id: 'c44x67' }), { w: 44, h: 67 });
+  assert.deepStrictEqual(POPPresets.cardSize({ id: 'meishi' }), { w: 91, h: 55 });
+  assert.deepStrictEqual(
+    POPPresets.cardSize({ id: 'c44x67', orientation: 'landscape' }), { w: 44, h: 67 });
+});
+test('cardSize: custom のときだけ customW/H を使う', function () {
+  assert.deepStrictEqual(
+    POPPresets.cardSize({ id: 'custom', customW: 30, customH: 40 }), { w: 30, h: 40 });
+  assert.deepStrictEqual(
+    POPPresets.cardSize({ id: 'c44x67', customW: 30, customH: 40 }), { w: 44, h: 67 });
+});
+test('cardSize: 不正値・未知のidは既定44×67', function () {
+  assert.deepStrictEqual(POPPresets.cardSize({ id: 'zzz' }), { w: 44, h: 67 });
+  assert.deepStrictEqual(POPPresets.cardSize(), { w: 44, h: 67 });
+  assert.deepStrictEqual(
+    POPPresets.cardSize({ id: 'custom', customW: 'abc', customH: null }), { w: 44, h: 67 });
+});
+test('sheetSize: landscape で幅と高さが入れ替わる', function () {
+  assert.deepStrictEqual(POPPresets.sheetSize({ id: 'a4' }), { w: 210, h: 297 });
+  assert.deepStrictEqual(
+    POPPresets.sheetSize({ id: 'a4', orientation: 'landscape' }), { w: 297, h: 210 });
+});
+test('sheetInner: 安全余白を両側から引く', function () {
+  assert.deepStrictEqual(POPPresets.sheetInner({ id: 'a4', margin: 5 }), { w: 200, h: 287 });
+  assert.deepStrictEqual(POPPresets.sheetInner({ id: 'a4', margin: 0 }), { w: 210, h: 297 });
+});
+test('clampCustomCard: 10mm下限とシート内寸上限', function () {
+  var sheet = { id: 'a4', margin: 5 };
+  assert.deepStrictEqual(
+    POPPresets.clampCustomCard({ customW: 3, customH: 5 }, sheet), { customW: 10, customH: 10 });
+  assert.deepStrictEqual(
+    POPPresets.clampCustomCard({ customW: 999, customH: 999 }, sheet), { customW: 200, customH: 287 });
+  assert.deepStrictEqual(
+    POPPresets.clampCustomCard({ customW: 44, customH: 67 }, sheet), { customW: 44, customH: 67 });
+});
+test('scaleFor: 縦横の入れ替えだけなら係数1（縮めない）', function () {
+  assert.strictEqual(POPPresets.scaleFor(44, 67, 67, 44), 1);
+  assert.strictEqual(POPPresets.scaleFor(67, 44, 44, 67), 1);
+});
+test('scaleFor: それ以外は min（はみ出さない側）', function () {
+  assert.strictEqual(POPPresets.scaleFor(100, 100, 50, 50), 0.5);
+  assert.strictEqual(POPPresets.scaleFor(100, 200, 50, 50), 0.25);
+  assert.strictEqual(POPPresets.scaleFor(44, 67, 44, 67), 1);
+});
+test('scaleCard: pt と余白が比例し、下限でクランプされる', function () {
+  var c = POPPresets.defaultCardState();
+  c.name.size = 64; c.price.size = 110; c.layout.padding = 14; c.layout.gap = 7;
+  c.design.border.width = 1.2;
+  POPPresets.scaleCard(c, 0.5, { w: 105, h: 148 });
+  assert.strictEqual(c.name.size, 32);
+  assert.strictEqual(c.price.size, 55);
+  assert.strictEqual(c.layout.padding, 7);
+  assert.strictEqual(c.layout.gap, 3.5);
+  assert.strictEqual(c.design.border.width, 0.6);
+});
+test('scaleCard: 文字は4pt・枠線は0.3mm を下回らない', function () {
+  var c = POPPresets.defaultCardState();
+  c.name.size = 10; c.design.border.width = 1.2;
+  POPPresets.scaleCard(c, 0.05, { w: 20, h: 20 });
+  assert.strictEqual(c.name.size, 4);
+  assert.strictEqual(c.design.border.width, 0.3);
+});
+test('scaleCard: 行間・色・文章は変えない', function () {
+  var c = POPPresets.defaultCardState();
+  c.name.text = 'ポップ'; c.name.lineHeight = 1.25; c.name.color = '#111111';
+  POPPresets.scaleCard(c, 0.3, { w: 44, h: 67 });
+  assert.strictEqual(c.name.text, 'ポップ');
+  assert.strictEqual(c.name.lineHeight, 1.25);
+  assert.strictEqual(c.name.color, '#111111');
+});
+test('scaleCard: 係数1なら何も変わらない', function () {
+  var c = POPPresets.defaultCardState();
+  c.name.size = 64;
+  POPPresets.scaleCard(c, 1, { w: 44, h: 67 });
+  assert.strictEqual(c.name.size, 64);
+});
+test('scaleCard: 差分オブジェクトに未指定のキーを作らない（テンプレ用）', function () {
+  /* テンプレートの apply は一部のキーしか持たない。ここで size を勝手に
+     生やすと、ユーザーが設定した値をテンプレ適用が上書きしてしまう。 */
+  var patch = {
+    design: { bg: '#fff', border: { style: 'solid', width: 3, color: '#e60012' } },
+    layout: { align: 'center', padding: 12, gap: 10 },
+    badge: { bg: '#ffe100', color: '#e60012', style: 'ribbon' },
+    name: { font: 'sans', weight: 900, color: '#111', size: 62 }
+  };
+  POPPresets.scaleCard(patch, 0.5, { w: 105, h: 148 });
+  assert.strictEqual(patch.badge.size, undefined);
+  assert.strictEqual(patch.catch, undefined);
+  assert.strictEqual(patch.name.size, 31);
+  assert.strictEqual(patch.layout.padding, 6);
+  assert.strictEqual(patch.design.border.width, 1.5);
+  assert.strictEqual(patch.layout.align, 'center');
+});
+test('clampImage: ブリードは許すが最低20mmはカード内に残す', function () {
+  var im = { src: 'x', wMm: 30, aspect: 1, xMm: 999, yMm: -999 };
+  POPPresets.clampImage(im, { w: 44, h: 67 });
+  assert.strictEqual(im.xMm, 44 - 20);
+  assert.strictEqual(im.yMm, 20 - 30);
+});
+test('clampImage: 幅は10〜600mm', function () {
+  var im = { src: 'x', wMm: 5, aspect: 1, xMm: 0, yMm: 0 };
+  POPPresets.clampImage(im, { w: 44, h: 67 });
+  assert.strictEqual(im.wMm, 10);
+});
+test('imageMaxSide: カード長辺×12px、800〜2000で頭打ち', function () {
+  assert.strictEqual(POPPresets.imageMaxSide({ w: 44, h: 67 }), 804);
+  assert.strictEqual(POPPresets.imageMaxSide({ w: 20, h: 20 }), 800);
+  assert.strictEqual(POPPresets.imageMaxSide({ w: 210, h: 297 }), 2000);
 });
 
 /* ---------- POPText.wrap ---------- */
