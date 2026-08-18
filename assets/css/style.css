@@ -399,6 +399,7 @@ textarea.control { resize: vertical; line-height: 1.5; }
 @media print {
   body { background: #fff; }
   .appbar, .panel, .cards, .preview__bar, .preview__note { display: none !important; }
+  .preview-tabs, .preview-pager { display: none; }
   .preview__stage { border: none; padding: 0; background: none; }
   .preview__canvas { box-shadow: none; }
 }

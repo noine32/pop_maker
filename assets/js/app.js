@@ -423,90 +423,6 @@
     requestRender();
   }
 
-  /* ---------- 出力 ---------- */
-  function safeFileName() {
-    var base = String(state.name.text || 'pop').replace(/[\\/:*?"<>|\s\n]+/g, '_').slice(0, 40);
-    return (base || 'pop');
-  }
-
-  function exportPng() {
-    var dpi = Number(document.getElementById('export-dpi').value) || 300;
-    setStatus('画像を作成中…');
-    /* 描画前にフォント・画像の読み込みを待つ */
-    POPFonts.ensureAll(POPRenderer.usedFonts(state)).then(function () {
-     POPImageTool.waitForCard(state, function (assets) {
-      var cv = POPRenderer.renderToCanvas(state, dpi, assets, cardSizeMm());
-      var done = function (blob) {
-        POPStorage.download(blob, safeFileName() + '_' + dpi + 'dpi.png');
-        setStatus('PNGを保存しました', true);
-      };
-      var fail = function () {
-        setStatus('画像を作成できませんでした。解像度を下げるか用紙を小さくしてお試しください', true);
-      };
-      /* dataURL 経由の書き出し（toBlob 非対応 or null 時のフォールバック） */
-      var viaDataUrl = function () {
-        try {
-          var data = cv.toDataURL('image/png').split(',')[1];
-          if (!data) { fail(); return; }
-          var bin = atob(data), arr = new Uint8Array(bin.length);
-          for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-          done(new Blob([arr], { type: 'image/png' }));
-        } catch (e) { fail(); }
-      };
-      if (cv.toBlob) {
-        /* 大きい用紙×高dpi では canvas 面積上限で b が null になり得る＝
-           握り潰さず dataURL にフォールバックし、それも駄目なら失敗を通知する */
-        cv.toBlob(function (b) { if (b) done(b); else viaDataUrl(); }, 'image/png');
-      } else {
-        viaDataUrl();
-      }
-     });
-    });
-  }
-
-  function printPop() {
-    setStatus('印刷を準備中…');
-    POPFonts.ensureAll(POPRenderer.usedFonts(state)).then(function () {
-     POPImageTool.waitForCard(state, function (assets) {
-      var size = cardSizeMm();
-      var url = POPRenderer.renderToCanvas(state, 300, assets, size).toDataURL('image/png');
-
-      var frame = document.createElement('iframe');
-      frame.setAttribute('aria-hidden', 'true');
-      frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
-      document.body.appendChild(frame);
-
-      var doc = frame.contentWindow.document;
-      doc.open();
-      doc.write(
-        '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + safeFileName() + '</title><style>' +
-        '@page{size:' + size.w + 'mm ' + size.h + 'mm;margin:0}' +
-        'html,body{margin:0;padding:0}' +
-        'img{width:' + size.w + 'mm;height:' + size.h + 'mm;display:block}' +
-        '</style></head><body><img id="pop" alt=""></body></html>'
-      );
-      doc.close();
-
-      var img = doc.getElementById('pop');
-      var go = function () {
-        try {
-          frame.contentWindow.focus();
-          frame.contentWindow.print();
-          setStatus('印刷ダイアログを開きました', true);
-        } catch (e) {
-          setStatus('印刷を開始できませんでした', true);
-        }
-        setTimeout(function () {
-          if (frame.parentNode) frame.parentNode.removeChild(frame);
-        }, 1500);
-      };
-      img.onload = go;
-      img.onerror = go;
-      img.src = url;
-     });
-    });
-  }
-
   /* ---------- イベント ---------- */
   function bindEvents() {
     /* 入力欄 → 状態 */
@@ -607,12 +523,8 @@
       POPImageTool.clear();
     });
 
-    /* 書き出し */
-    document.getElementById('btn-png').addEventListener('click', exportPng);
-    document.getElementById('btn-print').addEventListener('click', printPop);
-
     document.getElementById('btn-save-json').addEventListener('click', function () {
-      POPStorage.exportJson(doc, safeFileName() + '.json');
+      POPStorage.exportJson(doc, POPExport.safeFileName() + '.json');
       setStatus('データを保存しました', true);
     });
 
@@ -721,6 +633,14 @@
     POPPresetUI.init({
       getCard: function () { return state; },
       applyCard: applyCardState,
+      setStatus: setStatus
+    });
+
+    POPExport.init({
+      getDoc: function () { return doc; },
+      getCard: function () { return state; },
+      getCardSize: cardSizeMm,
+      getPageIndex: function () { return pageIndex; },
       setStatus: setStatus
     });
 

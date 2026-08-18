@@ -24,6 +24,17 @@
         <option value="600">600dpi（高精細）</option>
       </select>
     </label>
+    <label class="field field--inline">
+      <span>PNGの対象</span>
+      <select id="export-target">
+        <option value="sheet">シート（面付け済み）</option>
+        <option value="card">選択中のカードのみ</option>
+      </select>
+    </label>
+    <label class="field field--inline" id="export-allpages-wrap">
+      <input type="checkbox" id="export-allpages">
+      <span>全ページを保存する</span>
+    </label>
     <button type="button" id="btn-png" class="btn btn--primary">PNG保存</button>
     <button type="button" id="btn-print" class="btn">印刷</button>
     <button type="button" id="btn-save-json" class="btn btn--ghost">データ保存</button>
@@ -406,6 +417,7 @@
 <script src="assets/js/cards-ui.js"></script>
 <script src="assets/js/image-tool.js"></script>
 <script src="assets/js/preset-ui.js"></script>
+<script src="assets/js/export-tool.js"></script>
 <script src="assets/js/app.js"></script>
 </body>
 </html>
