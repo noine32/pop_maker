@@ -23,6 +23,9 @@ eval(read('assets/js/presets.js'));         // defines POPPresets
 /* --- POPDoc（純粋・DOM非依存）をそのまま読み込む --- */
 eval(read('assets/js/doc.js'));             // defines POPDoc
 
+/* --- POPSheetView（描画は canvas 依存だが、幾何の純関数だけテストする） --- */
+eval(read('assets/js/sheet-view.js'));      // defines POPSheetView
+
 /* --- app.js から mergeDeep を抽出して読み込む --- */
 var appSrc = read('assets/js/app.js');
 var mdMatch = appSrc.match(/function mergeDeep\(base, patch\) \{[\s\S]*?\n  \}/);
@@ -505,6 +508,64 @@ test('applyDesignToAll: 見た目だけ配り、文章と画像は触らない',
   assert.strictEqual(d.cards[1].name.text, 'さき');
   assert.strictEqual(d.cards[1].price.value, '980');
   assert.strictEqual(d.cards[1].image.src, 'data:x');
+});
+
+/* ---------- POPSheetView（セル配置の幾何） ---------- */
+function docFor(cardW, cardH, sheetId, margin) {
+  var d = POPDoc.defaultDoc();
+  d.card = { id: 'custom', customW: cardW, customH: cardH };
+  d.sheet.id = sheetId;
+  d.sheet.margin = margin;
+  return d;
+}
+
+test('sheetView: A4・44×67・余白5mm のページ数', function () {
+  var d = docFor(44, 67, 'a4', 5);
+  while (d.cards.length < 40) d.cards.push(POPPresets.defaultCardState());
+  assert.strictEqual(POPSheetView.layoutOf(d).perPage, 16);
+  assert.strictEqual(POPSheetView.pagesOf(d), 3);
+});
+test('sheetView: ページごとのカード添字', function () {
+  var d = docFor(44, 67, 'a4', 5);
+  while (d.cards.length < 20) d.cards.push(POPPresets.defaultCardState());
+  assert.deepStrictEqual(POPSheetView.cardIndexesOnPage(d, 0).length, 16);
+  assert.deepStrictEqual(POPSheetView.cardIndexesOnPage(d, 1), [16, 17, 18, 19]);
+  assert.deepStrictEqual(POPSheetView.cardIndexesOnPage(d, 2), []);
+});
+test('cellTransform: 回転なしはセル左上へ平行移動するだけ', function () {
+  var d = docFor(44, 67, 'a4', 5);
+  var L = POPSheetView.layoutOf(d);
+  var t = POPSheetView.cellTransform(L, 0);
+  assert.strictEqual(t.rot, 0);
+  assert.ok(Math.abs(t.tx - 17) < 1e-9, 'tx=' + t.tx);
+  assert.ok(Math.abs(t.ty - 14.5) < 1e-9, 'ty=' + t.ty);
+});
+test('cellTransform: 回転ありはセル右上へ寄せて90°回す', function () {
+  var d = docFor(44, 67, 'a4', 0);
+  var L = POPSheetView.layoutOf(d);
+  assert.strictEqual(L.rotate, true);
+  var t = POPSheetView.cellTransform(L, 0);
+  assert.ok(Math.abs(t.rot - Math.PI / 2) < 1e-12);
+  /* セル外形は 67×44。回転後にローカル+xが下・+yが左を向くので、
+     原点はセルの右上（x + cellW）に置く。 */
+  var r = POPImposition.cellRect(L, 0);
+  assert.ok(Math.abs(t.tx - (r.x + r.w)) < 1e-9, 'tx=' + t.tx);
+  assert.ok(Math.abs(t.ty - r.y) < 1e-9, 'ty=' + t.ty);
+});
+test('hitTest: セル内の座標からカード添字が引ける', function () {
+  var d = docFor(44, 67, 'a4', 5);
+  while (d.cards.length < 16) d.cards.push(POPPresets.defaultCardState());
+  /* 1枚目の中心 = (17+22, 14.5+33.5) */
+  assert.strictEqual(POPSheetView.hitTest(d, 0, { x: 39, y: 48 }), 0);
+  /* 2枚目の中心 = (17+44+22, 14.5+33.5) */
+  assert.strictEqual(POPSheetView.hitTest(d, 0, { x: 83, y: 48 }), 1);
+  /* 余白の上 */
+  assert.strictEqual(POPSheetView.hitTest(d, 0, { x: 2, y: 2 }), -1);
+});
+test('hitTest: カード数より後ろの空きセルは -1', function () {
+  var d = docFor(44, 67, 'a4', 5);
+  assert.strictEqual(d.cards.length, 1);
+  assert.strictEqual(POPSheetView.hitTest(d, 0, { x: 83, y: 48 }), -1);
 });
 
 /* ---------- POPText.wrap ---------- */
