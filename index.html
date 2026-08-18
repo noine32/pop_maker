@@ -35,6 +35,18 @@
 
 <main class="layout">
 
+  <!-- ============ カード一覧 ============ -->
+  <section class="cards" aria-labelledby="cards-title">
+    <h2 class="cards__title" id="cards-title">カード</h2>
+    <ul class="cards__list" id="card-list" role="listbox" aria-label="カード一覧" tabindex="0"></ul>
+    <div class="cards__ops">
+      <button type="button" class="btn btn--sm" id="btn-card-add">＋ 追加</button>
+      <button type="button" class="btn btn--sm" id="btn-card-dup">複製</button>
+      <button type="button" class="btn btn--sm btn--ghost" id="btn-card-del">削除</button>
+    </div>
+    <p class="cards__hint">↑↓ で選択／Alt＋↑↓ で並べ替え／ドラッグでも並べ替えできます</p>
+  </section>
+
   <!-- ============ 操作パネル ============ -->
   <section class="panel" aria-label="設定パネル">
 
@@ -380,6 +392,7 @@
 <script src="assets/js/sheet-view.js"></script>
 <script src="assets/js/doc.js"></script>
 <script src="assets/js/storage.js"></script>
+<script src="assets/js/cards-ui.js"></script>
 <script src="assets/js/image-tool.js"></script>
 <script src="assets/js/preset-ui.js"></script>
 <script src="assets/js/app.js"></script>

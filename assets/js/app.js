@@ -20,7 +20,7 @@
   function selectCard(index) {
     doc.activeIndex = Math.max(0, Math.min(index, doc.cards.length - 1));
     state = POPDoc.activeCard(doc);
-    refreshAll();
+    refreshAll(true);
   }
 
   /** 読み込んだ1カードぶんのデザインを選択中カードへ適用する（プリセット読込用） */
@@ -34,10 +34,12 @@
     refreshAll();
   }
 
-  /* 画面全体を現在の doc に合わせ直す。Task 7 でカード一覧の更新が加わる。 */
-  function refreshAll() {
+  /* 画面全体を現在の doc に合わせ直す */
+  function refreshAll(immediate) {
     syncUI();
     requestRender();
+    if (immediate) POPCardsUI.refreshNow();
+    else POPCardsUI.refresh();
   }
 
   var canvas = document.getElementById('canvas');
@@ -626,6 +628,49 @@
       getCard: function () { return state; },
       applyCard: applyCardState,
       setStatus: setStatus
+    });
+
+    POPCardsUI.init({
+      root: document.getElementById('card-list'),
+      getDoc: function () { return doc; },
+      getAssets: assetsByCard,
+      onSelect: selectCard,
+      onAdd: function () {
+        var size = cardSizeMm();
+        var c = POPPresets.defaultCardState();
+        /* defaultCardState は A4 前提の pt を持つのでカードサイズへ合わせる */
+        POPPresets.scaleCard(c, POPPresets.scaleFor(210, 297, size.w, size.h), size);
+        if (POPDoc.addCard(doc, c) < 0) {
+          setStatus('カードは' + POPDoc.MAX_CARDS + '枚までです', true);
+          return;
+        }
+        state = POPDoc.activeCard(doc);
+        refreshAll(true);
+        setStatus('カードを追加しました', true);
+      },
+      onDuplicate: function () {
+        if (POPDoc.duplicateCard(doc, doc.activeIndex) < 0) {
+          setStatus('カードは' + POPDoc.MAX_CARDS + '枚までです', true);
+          return;
+        }
+        state = POPDoc.activeCard(doc);
+        refreshAll(true);
+        setStatus('カードを複製しました', true);
+      },
+      onRemove: function () {
+        if (!POPDoc.removeCard(doc, doc.activeIndex)) {
+          setStatus('最後の1枚は削除できません', true);
+          return;
+        }
+        state = POPDoc.activeCard(doc);
+        refreshAll(true);
+        setStatus('カードを削除しました', true);
+      },
+      onMove: function (from, to) {
+        POPDoc.moveCard(doc, from, to);
+        state = POPDoc.activeCard(doc);
+        refreshAll(true);
+      }
     });
 
     bindEvents();
