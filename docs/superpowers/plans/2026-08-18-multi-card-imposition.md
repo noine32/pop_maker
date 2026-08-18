@@ -2601,9 +2601,10 @@ git commit -m "feat: カード一覧UIを追加
 - Modify: `index.html`
 - Modify: `assets/css/style.css`
 - Modify: `assets/js/app.js`
+- Modify: `assets/js/cards-ui.js`（Task 7 のレビューで出たサムネイル更新漏れと O(n²) の解消）
 
 **Interfaces:**
-- Consumes: `POPSheetView.drawSheet` / `layoutOf` / `pagesOf` / `hitTest`
+- Consumes: `POPSheetView.drawSheet` / `layoutOf` / `pagesOf` / `hitTest` / `cardIndexesOnPage`
 - Produces（`app.js` 内部）: `previewMode`（`'card'` / `'sheet'`）、`pageIndex`、`assetsByCard()`
 
 > **仕様からの意図的な簡略化**: 設計 §8 では「シートタブでドラッグして並べ替え」も挙げていたが、
@@ -2768,6 +2769,53 @@ git commit -m "feat: カード一覧UIを追加
 `render()` の下にあった旧メタ表示・`aria-label`・`setStatus` のコードは削除する
 （`updateMeta` に移した）。Task 6 で作った `ensureImageThenRerender()` は
 `ensureImagesThenRerender()` に置き換える（シートタブではそのページの全カードの画像が要るため）。
+
+- [ ] **Step 3b: 読み込み完了時に一覧サムネイルも更新する（Task 7 のレビュー指摘）**
+
+Webフォントや画像の読み込みが終わったとき、これまでは `requestRender()` だけを呼んでいたため
+**プレビューは新しくなるのにカード一覧のサムネイルが古いまま**残っていた（次に何か入力するまで直らない）。
+読み込み完了の3か所を `refreshAll()` に変える。`refreshAll()` は一覧の更新を 200ms 間引きで行うので
+連続呼び出しでも重くならない。
+
+`ensureImagesThenRerender()` の中:
+
+```javascript
+      if (!src || POPImageTool.isLoaded(src)) return;
+      POPImageTool.ensure(src, function () { refreshAll(); });
+```
+
+`ensureFontsThenRerender()` の末尾:
+
+```javascript
+    POPFonts.ensureAll(pending).then(function () { refreshAll(); });
+```
+
+`bindEvents()` の末尾にある `document.fonts.ready` のブロック:
+
+```javascript
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(function () { refreshAll(); });
+    }
+```
+
+あわせて `assets/js/cards-ui.js` の `drawThumbs()` で、`opts.getAssets()` を
+**ループの外で1回だけ呼ぶ**ように直す（現在はカードごとに呼んでおり、その中で全カードを
+`map` するためカード100枚で1万回の内部処理になる）。
+
+```javascript
+    var canvases = listEl.querySelectorAll('.cardrow__thumb');
+    var assetsAll = opts.getAssets ? opts.getAssets() : [];
+    for (var i = 0; i < canvases.length; i++) {
+      var cv = canvases[i];
+      cv.width = Math.max(1, Math.round(THUMB_W * dpr));
+      cv.height = Math.max(1, Math.round(size.h * pxPerMm));
+      cv.style.height = Math.round(size.h * (THUMB_W / size.w)) + 'px';
+      var assets = assetsAll[i] || { image: null };
+      try {
+        POPRenderer.draw(cv.getContext('2d'), doc.cards[i], pxPerMm, assets, size);
+      } catch (e) { /* サムネイルの失敗で画面を止めない */ }
+    }
+```
 
 - [ ] **Step 4: タブとページ送り・シート上のクリック選択を配線する**
 
