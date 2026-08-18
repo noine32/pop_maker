@@ -195,7 +195,10 @@ var POPPresets = (function () {
 
   var CARD_MIN_MM = 10;
 
+  /* 数値化。null / undefined / 空文字 / NaN はすべて「未指定」とみなして既定値へ落とす。
+     Number(null) や Number('') は 0 になるため、isFinite だけでは弾けない。 */
   function num(v, fallback) {
+    if (v === null || v === undefined || v === '') return fallback;
     var n = Number(v);
     return isFinite(n) ? n : fallback;
   }
@@ -206,16 +209,11 @@ var POPPresets = (function () {
   function cardSize(card) {
     card = card || {};
     var p = cardSizesById[card.id] || cardSizesById.c44x67;
-    /* id が custom で、かつ両方とも有効な値のときだけ customW/H を使う。
-       どちらか無効なら既定値に戻す＝不正な input の復帰経路を用意する */
     if (p.id === 'custom') {
-      var cw = card && card.customW;
-      var ch = card && card.customH;
-      var wNum = Number(cw);
-      var hNum = Number(ch);
-      if (isFinite(wNum) && isFinite(hNum)) {
-        return { w: Math.max(CARD_MIN_MM, wNum), h: Math.max(CARD_MIN_MM, hNum) };
-      }
+      return {
+        w: Math.max(CARD_MIN_MM, num(card.customW, 44)),
+        h: Math.max(CARD_MIN_MM, num(card.customH, 67))
+      };
     }
     return { w: p.w, h: p.h };
   }
@@ -233,6 +231,7 @@ var POPPresets = (function () {
   /** 安全余白を引いたシート内寸＝カードが入る最大の大きさ */
   function sheetInner(sheet) {
     var s = sheetSize(sheet);
+    /* 安全余白の入力範囲は 0〜30mm（UI の input と同じ範囲に丸める） */
     var m = Math.max(0, Math.min(30, num(sheet && sheet.margin, 5)));
     return { w: Math.max(0, s.w - m * 2), h: Math.max(0, s.h - m * 2) };
   }
