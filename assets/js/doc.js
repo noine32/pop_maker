@@ -143,16 +143,15 @@ var POPDoc = (function () {
     return true;
   }
 
-  /** 並べ替え。動かしたカードを選択したまま追従させる。 */
+  /** 並べ替え。動かしたカードも、動かしていない選択中カードも、
+      同じカードを選び続けるようにする（配列を変えた後に参照から位置を引き直す）。 */
   function moveCard(doc, from, to) {
     var n = doc.cards.length;
     if (from < 0 || from >= n || to < 0 || to >= n || from === to) return false;
-    var wasActive = doc.activeIndex === from;
+    var active = doc.cards[doc.activeIndex];   /* 変異前に参照を控える */
     var item = doc.cards.splice(from, 1)[0];
     doc.cards.splice(to, 0, item);
-    if (wasActive) doc.activeIndex = to;
-    else doc.activeIndex = doc.cards.indexOf(doc.cards[doc.activeIndex]);
-    doc.activeIndex = clamp(doc.activeIndex, 0, doc.cards.length - 1);
+    doc.activeIndex = clamp(doc.cards.indexOf(active), 0, doc.cards.length - 1);
     return true;
   }
 

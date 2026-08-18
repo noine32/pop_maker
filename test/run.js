@@ -465,6 +465,30 @@ test('moveCard: 並べ替えても選択中のカードが追従する', functio
   assert.deepStrictEqual(d.cards.map(function (c) { return c.name.text; }), ['B', 'C', 'A']);
   assert.strictEqual(d.activeIndex, 2);
 });
+test('moveCard: 選択中でないカードを動かしても選択は元のカードを追い続ける', function () {
+  var d = POPDoc.defaultDoc();
+  d.cards[0].name.text = 'A';
+  POPDoc.addCard(d, POPPresets.defaultCardState());
+  d.cards[1].name.text = 'B';
+  POPDoc.addCard(d, POPPresets.defaultCardState());
+  d.cards[2].name.text = 'C';
+  d.activeIndex = 2;                      /* C を選択中 */
+  POPDoc.moveCard(d, 0, 2);               /* A を末尾へ。C は動かしていない */
+  assert.deepStrictEqual(d.cards.map(function (c) { return c.name.text; }), ['B', 'C', 'A']);
+  assert.strictEqual(d.cards[d.activeIndex].name.text, 'C');
+  assert.strictEqual(d.activeIndex, 1);
+});
+test('sampleDoc: カード1枚・44×67mm・テンプレの文字サイズが縮んでいる', function () {
+  var d = POPDoc.sampleDoc();
+  assert.strictEqual(d.cards.length, 1);
+  assert.deepStrictEqual(POPPresets.cardSize(d.card), { w: 44, h: 67 });
+  assert.strictEqual(d.cards[0].paper, undefined);
+  /* A4前提の 64pt がそのまま乗ると 44mm 幅で潰れるため、比例縮小されていること */
+  assert.ok(d.cards[0].name.size < 64, 'name.size=' + d.cards[0].name.size);
+  assert.ok(d.cards[0].name.size >= 4);
+  assert.ok(d.cards[0].layout.padding < 14, 'padding=' + d.cards[0].layout.padding);
+  assert.ok(String(d.cards[0].name.text).length > 0, 'サンプル文言が入っていること');
+});
 test('applyDesignToAll: 見た目だけ配り、文章と画像は触らない', function () {
   var d = POPDoc.defaultDoc();
   POPDoc.addCard(d, POPPresets.defaultCardState());
