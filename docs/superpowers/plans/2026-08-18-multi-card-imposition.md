@@ -848,6 +848,30 @@ test('moveCard: 並べ替えても選択中のカードが追従する', functio
   assert.deepStrictEqual(d.cards.map(function (c) { return c.name.text; }), ['B', 'C', 'A']);
   assert.strictEqual(d.activeIndex, 2);
 });
+test('moveCard: 選択中でないカードを動かしても選択は元のカードを追い続ける', function () {
+  var d = POPDoc.defaultDoc();
+  d.cards[0].name.text = 'A';
+  POPDoc.addCard(d, POPPresets.defaultCardState());
+  d.cards[1].name.text = 'B';
+  POPDoc.addCard(d, POPPresets.defaultCardState());
+  d.cards[2].name.text = 'C';
+  d.activeIndex = 2;                      /* C を選択中 */
+  POPDoc.moveCard(d, 0, 2);               /* A を末尾へ。C は動かしていない */
+  assert.deepStrictEqual(d.cards.map(function (c) { return c.name.text; }), ['B', 'C', 'A']);
+  assert.strictEqual(d.cards[d.activeIndex].name.text, 'C');
+  assert.strictEqual(d.activeIndex, 1);
+});
+test('sampleDoc: カード1枚・44×67mm・テンプレの文字サイズが縮んでいる', function () {
+  var d = POPDoc.sampleDoc();
+  assert.strictEqual(d.cards.length, 1);
+  assert.deepStrictEqual(POPPresets.cardSize(d.card), { w: 44, h: 67 });
+  assert.strictEqual(d.cards[0].paper, undefined);
+  /* A4前提の 64pt がそのまま乗ると 44mm 幅で潰れるため、比例縮小されていること */
+  assert.ok(d.cards[0].name.size < 64, 'name.size=' + d.cards[0].name.size);
+  assert.ok(d.cards[0].name.size >= 4);
+  assert.ok(d.cards[0].layout.padding < 14, 'padding=' + d.cards[0].layout.padding);
+  assert.ok(String(d.cards[0].name.text).length > 0, 'サンプル文言が入っていること');
+});
 test('applyDesignToAll: 見た目だけ配り、文章と画像は触らない', function () {
   var d = POPDoc.defaultDoc();
   POPDoc.addCard(d, POPPresets.defaultCardState());
@@ -1029,16 +1053,17 @@ var POPDoc = (function () {
     return true;
   }
 
-  /** 並べ替え。動かしたカードを選択したまま追従させる。 */
+  /** 並べ替え。動かしたカードも、動かしていない選択中カードも、
+      同じカードを選び続けるようにする。
+      配列を変異させた後の添字で参照を取り直すと別のカードを指してしまうため、
+      変異前に参照を控えてから indexOf で位置を引き直す。 */
   function moveCard(doc, from, to) {
     var n = doc.cards.length;
     if (from < 0 || from >= n || to < 0 || to >= n || from === to) return false;
-    var wasActive = doc.activeIndex === from;
+    var active = doc.cards[doc.activeIndex];   /* 変異前に参照を控える */
     var item = doc.cards.splice(from, 1)[0];
     doc.cards.splice(to, 0, item);
-    if (wasActive) doc.activeIndex = to;
-    else doc.activeIndex = doc.cards.indexOf(doc.cards[doc.activeIndex]);
-    doc.activeIndex = clamp(doc.activeIndex, 0, doc.cards.length - 1);
+    doc.activeIndex = clamp(doc.cards.indexOf(active), 0, doc.cards.length - 1);
     return true;
   }
 
@@ -1095,7 +1120,7 @@ var POPDoc = (function () {
 - [ ] **Step 5: テストが通ることを確認する**
 
 Run: `node test/run.js`
-Expected: `67 passed, 0 failed`（既存 22 ＋ 12 ＋ 16 ＋ 17）。
+Expected: `69 passed, 0 failed`（既存 22 ＋ 12 ＋ 16 ＋ 19）。
 
 - [ ] **Step 6: `index.html` に読み込みを追加する**
 
@@ -1167,7 +1192,7 @@ v1（単品）はカードとシートを同寸にして移行するため、ど
 - [ ] **Step 3: 既存テストが壊れていないことを確認する**
 
 Run: `node test/run.js`
-Expected: `67 passed, 0 failed`（Task 3 と同じ件数のまま。renderer の `ptPx` 抽出が壊れていないことの確認）。
+Expected: `69 passed, 0 failed`（Task 3 と同じ件数のまま。renderer の `ptPx` 抽出が壊れていないことの確認）。
 
 - [ ] **Step 4: ブラウザで従来どおり表示されることを確認する**
 
@@ -1465,7 +1490,7 @@ var POPSheetView = (function () {
 - [ ] **Step 5: テストが通ることを確認する**
 
 Run: `node test/run.js`
-Expected: `73 passed, 0 failed`（Task 3 の 67 ＋ 新規 6）。
+Expected: `75 passed, 0 failed`（Task 3 の 69 ＋ 新規 6）。
 
 - [ ] **Step 6: `index.html` に読み込みを追加する**
 
@@ -2189,7 +2214,7 @@ Expected: `app.js` が **700行未満**、他の2つも 800行未満。
 - [ ] **Step 14: テストとブラウザで確認する**
 
 Run: `node test/run.js`
-Expected: `73 passed, 0 failed`（`mergeDeep` / `parseValue` の抽出が壊れていないことの確認）。
+Expected: `75 passed, 0 failed`（`mergeDeep` / `parseValue` の抽出が壊れていないことの確認）。
 
 > `test/run.js` は `app.js` から正規表現で `mergeDeep` と `parseValue` を抜き出している。
 > この2関数は `app.js` に残すこと（移設すると抽出が失敗してテストが落ちる）。
@@ -3373,7 +3398,7 @@ canvas 描画と印刷はブラウザでの目視確認になります。
 - [ ] **Step 3: 最終確認**
 
 Run: `node test/run.js`
-Expected: `73 passed, 0 failed`
+Expected: `75 passed, 0 failed`
 
 Run: `grep -rn "state.paper\|POPPresets.paperSize(state)" assets/js/app.js`
 Expected: 何も出ない
