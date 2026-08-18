@@ -197,6 +197,13 @@
     }).join('');
   }
 
+  function buildCardOptions() {
+    document.getElementById('card-select').innerHTML =
+      POPPresets.CARD_SIZES.map(function (c) {
+        return '<option value="' + c.id + '">' + c.label + '</option>';
+      }).join('');
+  }
+
   function buildTemplates() {
     document.getElementById('template-list').innerHTML = POPPresets.TEMPLATES.map(function (t) {
       return '<button type="button" class="template" data-template="' + t.id + '">' +
@@ -268,6 +275,9 @@
   }
 
   /* ---------- 描画 ---------- */
+  /* カードサイズの変更前の値。比例スケールの係数を出すために保持する。 */
+  var lastCardSize = null;
+
   /* プレビューの表示モードとページ */
   var previewMode = 'card';   /* 'card' | 'sheet' */
   var pageIndex = 0;
@@ -413,14 +423,34 @@
     if (msg && temporary) statusTimer = setTimeout(function () { statusEl.textContent = ''; }, 2500);
   }
 
-  /* ---------- テンプレート適用 ---------- */
+  /* ---------- テンプレート適用 ----------
+     テンプレの数値は A4(210×297) 前提。カードサイズへ焼き込んでから重ねる。 */
   function applyTemplate(id) {
     var t = POPPresets.templatesById[id];
     if (!t) return;
+    var size = cardSizeMm();
+    var patch = JSON.parse(JSON.stringify(t.apply));
+    POPPresets.scaleCard(patch, POPPresets.scaleFor(210, 297, size.w, size.h), size);
     state.template = id;
-    mergeDeep(state, JSON.parse(JSON.stringify(t.apply)));
-    syncUI();
-    requestRender();
+    mergeDeep(state, patch);
+    refreshAll(true);
+  }
+
+  /* カードの大きさが変わったら、全カードの文字・余白を比例させる。
+     縦横が入れ替わっただけのときは scaleFor が 1 を返すので縮まない（設計 §4.1）。 */
+  function applyCardSizeChange() {
+    var next = cardSizeMm();
+    if (!lastCardSize) { lastCardSize = next; return; }
+    if (next.w === lastCardSize.w && next.h === lastCardSize.h) return;
+
+    if (document.getElementById('scale-with-card').checked) {
+      var s = POPPresets.scaleFor(lastCardSize.w, lastCardSize.h, next.w, next.h);
+      doc.cards.forEach(function (c) { POPPresets.scaleCard(c, s, next); });
+      if (s !== 1) setStatus('カードの大きさに合わせて文字と余白を調整しました', true);
+    } else {
+      doc.cards.forEach(function (c) { POPPresets.clampImage(c.image, next); });
+    }
+    lastCardSize = next;
   }
 
   /* ---------- イベント ---------- */
@@ -447,17 +477,19 @@
       refreshAll();
     }
 
-    /* カード/シート設定が変わったときの後処理。Task 10 で比例スケールが加わる。 */
+    /* カード/シート設定が変わったときの後処理 */
     function onDocChange(docPath) {
       doc.sheet.margin = Math.max(0, Math.min(30, Number(doc.sheet.margin) || 0));
       doc.sheet.gap = Math.max(0, Math.min(20, Number(doc.sheet.gap) || 0));
-      if (docPath.indexOf('card.') === 0 && doc.card.id === 'custom') {
+
+      /* カスタムカードはシート内寸へ丸める。プリセットは丸めず警告だけ（設計 §4）。 */
+      if (doc.card.id === 'custom') {
         var c = POPPresets.clampCustomCard(doc.card, doc.sheet);
         doc.card.customW = c.customW;
         doc.card.customH = c.customH;
       }
-      POPImageTool.clamp();
-      refreshAll();
+      applyCardSizeChange();
+      refreshAll(true);
     }
 
     /* タブ切り替え（クリック＋キーボード：←→ Home End） */
@@ -484,6 +516,16 @@
     document.getElementById('template-list').addEventListener('click', function (ev) {
       var btn = ev.target.closest('[data-template]');
       if (btn) applyTemplate(btn.getAttribute('data-template'));
+    });
+
+    document.getElementById('btn-apply-design').addEventListener('click', function () {
+      var n = doc.cards.length - 1;
+      if (n <= 0) { setStatus('カードが1枚のため適用先がありません', true); return; }
+      if (!window.confirm(n + '枚のカードのデザインを上書きします。よろしいですか？\n' +
+                          '（商品名・価格・説明・画像は変わりません）')) return;
+      var applied = POPDoc.applyDesignToAll(doc, doc.activeIndex);
+      refreshAll(true);
+      setStatus(applied + '枚のカードにデザインを適用しました', true);
     });
 
     /* フォントの一括適用・全体サイズ調整 */
@@ -614,6 +656,7 @@
   function init() {
     buildTextPanels();
     buildPaperOptions();
+    buildCardOptions();
     buildTemplates();
 
     /* ①新形式 → ②旧形式（単品）を移行 → ③サンプル の順に復元する */
@@ -621,6 +664,7 @@
     if (!restored) restored = POPDoc.migrate(POPStorage.loadLegacyAuto());
     doc = restored || POPDoc.sampleDoc();
     state = POPDoc.activeCard(doc);
+    lastCardSize = cardSizeMm();
 
     POPImageTool.init({
       canvas: canvas,

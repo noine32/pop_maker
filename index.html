@@ -170,30 +170,76 @@
     <details class="sect">
       <summary class="sect__head">3. 用紙とレイアウト</summary>
       <div class="sect__body">
-        <div class="grid grid--2">
+        <section class="section">
+          <h2 class="section__title">カードの大きさ</h2>
           <label class="field">
-            <span class="field__label">用紙サイズ</span>
-            <select class="control" data-path="paper.id" id="paper-select"></select>
+            <span>プリセット</span>
+            <select id="card-select" data-doc-path="card.id"></select>
+          </label>
+          <div class="field-row" id="card-custom-size" hidden>
+            <label class="field">
+              <span>幅(mm)</span>
+              <input type="number" min="10" max="1000" step="0.5" data-doc-path="card.customW">
+            </label>
+            <label class="field">
+              <span>高さ(mm)</span>
+              <input type="number" min="10" max="1000" step="0.5" data-doc-path="card.customH">
+            </label>
+          </div>
+          <label class="field field--inline">
+            <input type="checkbox" id="scale-with-card" checked>
+            <span>文字とレイアウトも比例させる</span>
+          </label>
+          <p class="hint">サイズ変更は元の値を書き換えます。元に戻したいときはテンプレートを選び直してください。</p>
+        </section>
+
+        <section class="section">
+          <h2 class="section__title">印刷シート</h2>
+          <label class="field">
+            <span>用紙</span>
+            <select id="paper-select" data-doc-path="sheet.id"></select>
           </label>
           <label class="field">
-            <span class="field__label">向き</span>
-            <select class="control" data-path="paper.orientation">
+            <span>向き</span>
+            <select data-doc-path="sheet.orientation">
               <option value="portrait">縦</option>
               <option value="landscape">横</option>
             </select>
           </label>
-        </div>
-
-        <div class="grid grid--2" id="custom-size" hidden>
-          <label class="field">
-            <span class="field__label">幅（mm）</span>
-            <input type="number" min="20" max="1000" step="1" class="control" data-path="paper.customW">
+          <div class="field-row" id="custom-size" hidden>
+            <label class="field">
+              <span>幅(mm)</span>
+              <input type="number" min="20" max="1000" data-doc-path="sheet.customW">
+            </label>
+            <label class="field">
+              <span>高さ(mm)</span>
+              <input type="number" min="20" max="1000" data-doc-path="sheet.customH">
+            </label>
+          </div>
+          <div class="field-row">
+            <label class="field">
+              <span>安全余白(mm)</span>
+              <input type="number" min="0" max="30" step="0.5" data-doc-path="sheet.margin">
+            </label>
+            <label class="field">
+              <span>カード間隔(mm)</span>
+              <input type="number" min="0" max="20" step="0.5" data-doc-path="sheet.gap">
+            </label>
+          </div>
+          <label class="field field--inline">
+            <input type="checkbox" data-doc-path="sheet.allowRotate">
+            <span>90°回して枚数が増えるなら回す</span>
           </label>
-          <label class="field">
-            <span class="field__label">高さ（mm）</span>
-            <input type="number" min="20" max="1000" step="1" class="control" data-path="paper.customH">
+          <label class="field field--inline">
+            <input type="checkbox" data-doc-path="sheet.center">
+            <span>用紙の中央に寄せる</span>
           </label>
-        </div>
+          <label class="field field--inline">
+            <input type="checkbox" data-doc-path="sheet.cutLine">
+            <span>カット線を入れる</span>
+          </label>
+          <p class="hint">安全余白を 0mm にすると枚数は増えますが、フチなし印刷に対応したプリンタ以外では端が欠けます。</p>
+        </section>
 
         <div class="grid grid--2">
           <label class="field">
@@ -238,6 +284,7 @@
         <div class="field">
           <span class="field__label">テンプレート</span>
           <div class="templates" id="template-list"></div>
+          <button type="button" class="btn btn--sm" id="btn-apply-design">このデザインを全カードに適用</button>
           <p class="field__hint">※テンプレートを選ぶと色・フォント・枠線がまとめて変わります（文章はそのまま）</p>
         </div>
 

@@ -200,6 +200,10 @@ textarea.control { resize: vertical; line-height: 1.5; }
 .grid--2 { grid-template-columns: 1fr 1fr; }
 .grid--3 { grid-template-columns: repeat(3, 1fr); }
 
+.hint { font-size: 11px; color: #64748b; margin: 4px 0 0; line-height: 1.5; }
+.field-row { display: flex; gap: 8px; }
+.field-row .field { flex: 1; }
+
 .check {
   display: flex;
   align-items: center;
