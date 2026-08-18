@@ -37,6 +37,8 @@
 | `assets/js/doc.js` | ドキュメント操作（既定値・v1移行・正規化・カードの追加/複製/削除/移動・全カードへデザイン適用） | 新規 |
 | `assets/js/sheet-view.js` | シート合成描画（`drawSheet` / `renderSheetToCanvas`）とセルのヒットテスト | 新規 |
 | `assets/js/cards-ui.js` | カード一覧の DOM 構築とイベント（サムネイル・キーボード・並べ替え） | 新規 |
+| `assets/js/image-tool.js` | 商品画像の操作（ドラッグ・リサイズ・取り込み・読み込みキャッシュ） | 新規（`app.js` から移設） |
+| `assets/js/preset-ui.js` | 「名前を付けて保存」したデザインの一覧と操作 | 新規（`app.js` から移設） |
 | `assets/js/presets.js` | カードサイズ表・寸法解決・比例スケール・画像クランプ・既定ドキュメント | 変更 |
 | `assets/js/renderer.js` | カード1枚の描画。`draw()` に寸法引数 `sizeMm` を追加するだけ | 変更 |
 | `assets/js/storage.js` | 自動保存キーを v2 に変更 | 変更 |
@@ -46,7 +48,10 @@
 | `test/run.js` | 面付け・寸法解決・スケール・移行のテストを追加 | 変更 |
 
 `index.html` の読み込み順は
-`fonts → text → presets → imposition → renderer → sheet-view → doc → storage → cards-ui → app`。
+`fonts → text → presets → imposition → renderer → sheet-view → doc → storage → image-tool → preset-ui → cards-ui → app`。
+
+`app.js` は現在 798 行あり、Global Constraints の 800 行に既に達している。Task 6 の時点で
+超えてしまうため、**Task 6 で画像操作とプリセットUIを切り出して減量してから**機能を足す。
 
 ---
 
@@ -1485,23 +1490,36 @@ git commit -m "feat: シート合成描画を追加
 
 ---
 
-## Task 6: app.js をドキュメント構造へ移行する
+## Task 6: app.js をドキュメント構造へ移行し、画像操作を切り出す
 
 画面はまだカード1枚しか出さないが、内部状態を `doc` に切り替える。`state` は「選択中カードへの参照」として残すので、既存の編集パネル・イベント配線はほぼそのまま動く。
 
+あわせて `app.js` を減量する。現在 798 行あり、Global Constraints の「1ファイル800行以内」に既に達している。以降のタスクで約250行増えるため、**先に責務で切り出しておく**。切り出す2つは、いずれもドキュメント構造とは独立した責務で、このタスクで触る範囲と重なっているため今が最も安全なタイミング。
+
+- 画像のドラッグ操作・取り込み・読み込みキャッシュ → `image-tool.js`（約200行）
+- 「名前を付けて保存」の一覧と操作 → `preset-ui.js`（約80行）
+
 **Files:**
+- Create: `assets/js/image-tool.js`
+- Create: `assets/js/preset-ui.js`
 - Modify: `assets/js/app.js`
 - Modify: `assets/js/storage.js`
 - Modify: `index.html`
 
 **Interfaces:**
 - Consumes: `POPDoc.*`、`POPPresets.cardSize` / `clampImage` / `imageMaxSide` / `defaultCardState`
-- Produces（`app.js` 内部・Task 7 以降が使う）:
-  - `doc` — モジュール内の変数
-  - `state` — `doc.cards[doc.activeIndex]` への参照
-  - `cardSizeMm() -> { w, h }`
-  - `selectCard(index)` — 選択を移して再描画
-  - `refreshAll()` — `syncUI()` ＋ `requestRender()` ＋ カード一覧の更新（Task 7 で中身が増える）
+- Produces:
+  - `POPImageTool.init({ canvas, ctx, getCard, getCardSize, onChange, setStatus })`
+  - `POPImageTool.ensure(src, cb)` — 画像を読み込んでキャッシュ（`cb(HTMLImageElement|null)`）
+  - `POPImageTool.assetsFor(cardState) -> { image }`
+  - `POPImageTool.assetsForCards(cards) -> [{ image }]`
+  - `POPImageTool.waitForCard(cardState, cb)` / `POPImageTool.waitForCards(cards, cb)`
+  - `POPImageTool.drawHandles()` — プレビューに選択枠と四隅ハンドルを重ね描き
+  - `POPImageTool.setEnabled(bool)` — シート表示中は操作を止める
+  - `POPImageTool.clamp()` / `POPImageTool.importFile(file)` / `POPImageTool.clear()`
+  - `POPPresetUI.init({ getCard, applyCard, setStatus })` / `POPPresetUI.render()`
+  - `app.js` 内部（Task 7 以降が使う）: `doc` / `state` / `cardSizeMm()` / `selectCard(i)` /
+    `refreshAll()` / `assetsByCard()`
 
 - [ ] **Step 1: `storage.js` の自動保存キーを v2 にする**
 
@@ -1512,7 +1530,7 @@ git commit -m "feat: シート合成描画を追加
   var LEGACY_AUTO_KEY = 'popmaker.autosave.v1';   /* 旧「単品」形式。読むだけで消さない */
 ```
 
-同ファイルの `loadAuto` の**直後**に追加する。
+`loadAuto` の**直後**に追加する。
 
 ```javascript
   /** 旧形式（単品 state）の自動保存を読む。移行のためだけに使う。 */
@@ -1531,7 +1549,372 @@ git commit -m "feat: シート合成描画を追加
     loadLegacyAuto: loadLegacyAuto,
 ```
 
-- [ ] **Step 2: `app.js` の状態をドキュメントに差し替える**
+- [ ] **Step 2: `assets/js/image-tool.js` を作る**
+
+`app.js` から次の関数・変数を**そのまま移設**する。移設元は削除する（Step 4）。
+
+移設対象: `imgCache` / `imgLoading` / `ensureImage` / `withAssets` / `imgRectPx` /
+`drawImageHandles` / `eventToMm` / `imageHitTest` / `imgDrag` / `onImagePointerDown` /
+`onImagePointerMove` / `endImageDrag` / `updateImageCursor` / `importImageFile`
+
+移設にあたっての書き換えは次の3点だけで、**ロジックは変えない**。
+
+1. `state` → `cfg.getCard()`
+2. `POPPresets.paperSize(state)` → `cfg.getCardSize()`
+3. `syncUI(); requestRender();` → `cfg.onChange();`、`setStatus(...)` → `cfg.setStatus(...)`
+
+```javascript
+/* ===========================================================
+   商品画像/ロゴの操作
+   プレビュー上のドラッグ移動・四隅リサイズ、ファイル取り込み、
+   読み込みキャッシュ（カード横断で src をキーに共有）。
+   状態は持たず、app.js から渡されたアクセサ経由で選択中カードを触る。
+   =========================================================== */
+var POPImageTool = (function () {
+  'use strict';
+
+  var cfg = null;         /* { canvas, ctx, getCard, getCardSize, onChange, setStatus } */
+  var cache = {};         /* src -> HTMLImageElement */
+  var loading = {};
+  var drag = null;
+  var enabled = true;
+
+  /* ---------- 読み込みキャッシュ ---------- */
+  function ensure(src, cb) {
+    if (!src) { if (cb) cb(null); return; }
+    if (cache[src]) { if (cb) cb(cache[src]); return; }
+    if (loading[src]) return;      /* 二重ロード防止（onload 完了時に再描画される） */
+    loading[src] = true;
+    var im = new Image();
+    im.onload = function () { cache[src] = im; delete loading[src]; if (cb) cb(im); };
+    im.onerror = function () { delete loading[src]; if (cb) cb(null); };
+    im.src = src;
+  }
+
+  /** 今読み込めているぶんだけを返す（待たない） */
+  function assetsFor(card) {
+    var src = card && card.image && card.image.src;
+    return { image: src ? (cache[src] || null) : null };
+  }
+
+  function assetsForCards(cards) {
+    return cards.map(function (c) { return assetsFor(c); });
+  }
+
+  /** 選択中カードの画像を読み込んでから cb（書き出し用） */
+  function waitForCard(card, cb) {
+    var src = card && card.image && card.image.src;
+    if (!src) { cb({ image: null }); return; }
+    ensure(src, function (img) { cb({ image: img }); });
+  }
+
+  /** 全カードの画像を読み込んでから cb。読み込めなかったものは null のまま進む。 */
+  function waitForCards(cards, cb) {
+    var srcs = [];
+    cards.forEach(function (c) {
+      var s = c.image && c.image.src;
+      if (s && srcs.indexOf(s) < 0) srcs.push(s);
+    });
+    if (!srcs.length) { cb(assetsForCards(cards)); return; }
+    var remaining = srcs.length;
+    srcs.forEach(function (s) {
+      ensure(s, function () {
+        remaining--;
+        if (remaining === 0) cb(assetsForCards(cards));
+      });
+    });
+  }
+
+  /* ---------- 配置のクランプ ---------- */
+  function clamp() {
+    POPPresets.clampImage(cfg.getCard().image, cfg.getCardSize());
+  }
+
+  /* ---------- プレビュー上の操作 ---------- */
+  /** シート表示中など、画像操作をさせたくないときに false にする */
+  function setEnabled(v) {
+    enabled = !!v;
+    if (!enabled) cfg.canvas.style.cursor = 'default';
+  }
+
+  /* 現在の状態から画像の矩形（プレビュー canvas のバッキングpx）を得る */
+  function rectPx() {
+    var im = cfg.getCard().image;
+    var size = cfg.getCardSize();
+    var s = cfg.canvas.width / size.w;              /* バッキングpx / mm */
+    var w = im.wMm * s;
+    var h = (im.wMm / (im.aspect || 1)) * s;
+    return { x: (im.xMm || 0) * s, y: (im.yMm || 0) * s, w: w, h: h, s: s };
+  }
+
+  /* 選択枠＋四隅ハンドルをプレビューに重ね描き（書き出しには出さない） */
+  function drawHandles() {
+    if (!enabled) return;
+    var im = cfg.getCard().image;
+    if (!im || !im.src || !(im.wMm > 0)) return;
+    var ctx = cfg.ctx;
+    var r = rectPx();
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.strokeStyle = '#2b6cb0';
+    ctx.lineWidth = Math.max(1, r.s * 0.4);
+    ctx.setLineDash([r.s * 1.6, r.s * 1.2]);
+    ctx.strokeRect(r.x, r.y, r.w, r.h);
+    ctx.setLineDash([]);
+    var hs = Math.max(7, r.s * 3);                  /* ハンドル一辺（バッキングpx） */
+    [[r.x, r.y], [r.x + r.w, r.y], [r.x, r.y + r.h], [r.x + r.w, r.y + r.h]].forEach(function (c) {
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.rect(c[0] - hs / 2, c[1] - hs / 2, hs, hs);
+      ctx.fill();
+      ctx.stroke();
+    });
+    ctx.restore();
+  }
+
+  /* ポインタ座標 → mm（カード左上基準） */
+  function eventToMm(ev) {
+    var rect = cfg.canvas.getBoundingClientRect();
+    var size = cfg.getCardSize();
+    return {
+      x: (ev.clientX - rect.left) / rect.width * size.w,
+      y: (ev.clientY - rect.top) / rect.height * size.h
+    };
+  }
+
+  /* mm 座標が画像のどこに当たるか（四隅ハンドル / 内部 / 外） */
+  function hitTest(mm) {
+    var im = cfg.getCard().image;
+    if (!im || !im.src || !(im.wMm > 0)) return null;
+    var hMm = im.wMm / (im.aspect || 1);
+    var size = cfg.getCardSize();
+    var tol = Math.max(size.w, size.h) * 0.035 + 2;     /* 指でも掴める余裕 */
+    var corners = {
+      tl: [im.xMm, im.yMm], tr: [im.xMm + im.wMm, im.yMm],
+      bl: [im.xMm, im.yMm + hMm], br: [im.xMm + im.wMm, im.yMm + hMm]
+    };
+    for (var key in corners) {
+      if (Math.abs(mm.x - corners[key][0]) < tol && Math.abs(mm.y - corners[key][1]) < tol) {
+        return { type: 'corner', corner: key };
+      }
+    }
+    if (mm.x >= im.xMm && mm.x <= im.xMm + im.wMm && mm.y >= im.yMm && mm.y <= im.yMm + hMm) {
+      return { type: 'inside' };
+    }
+    return null;
+  }
+
+  function onPointerDown(ev) {
+    if (!enabled) return;
+    var mm = eventToMm(ev);
+    var hit = hitTest(mm);
+    if (!hit) return;
+    ev.preventDefault();
+    try { cfg.canvas.setPointerCapture(ev.pointerId); } catch (e) { /* noop */ }
+    var im = cfg.getCard().image;
+    if (hit.type === 'corner') {
+      var hMm = im.wMm / (im.aspect || 1);
+      var left = hit.corner.indexOf('l') >= 0, top = hit.corner.indexOf('t') >= 0;
+      /* 反対側の角を固定点（anchor）にしてアスペクト維持リサイズ */
+      drag = { mode: 'resize', left: left, top: top,
+               anchor: { x: left ? im.xMm + im.wMm : im.xMm, y: top ? im.yMm + hMm : im.yMm } };
+    } else {
+      drag = { mode: 'move', dx: mm.x - im.xMm, dy: mm.y - im.yMm };
+    }
+  }
+
+  function onPointerMove(ev) {
+    if (!enabled) return;
+    if (!drag) { updateCursor(ev); return; }
+    ev.preventDefault();
+    var im = cfg.getCard().image, mm = eventToMm(ev);
+    if (drag.mode === 'move') {
+      im.xMm = mm.x - drag.dx;
+      im.yMm = mm.y - drag.dy;
+    } else {
+      var dxMm = Math.abs(mm.x - drag.anchor.x);
+      var dyMm = Math.abs(mm.y - drag.anchor.y);
+      var newW = Math.max(10, Math.min(600, Math.max(dxMm, dyMm * (im.aspect || 1))));
+      var newH = newW / (im.aspect || 1);
+      im.wMm = newW;
+      im.xMm = drag.left ? drag.anchor.x - newW : drag.anchor.x;
+      im.yMm = drag.top ? drag.anchor.y - newH : drag.anchor.y;
+    }
+    clamp();
+    cfg.onChange();
+  }
+
+  function endDrag(ev) {
+    if (!drag) return;
+    drag = null;
+    try { cfg.canvas.releasePointerCapture(ev.pointerId); } catch (e) { /* noop */ }
+    cfg.onChange();
+  }
+
+  function updateCursor(ev) {
+    if (!enabled) { cfg.canvas.style.cursor = 'default'; return; }
+    var hit = hitTest(eventToMm(ev));
+    cfg.canvas.style.cursor = !hit ? 'default'
+      : (hit.type === 'corner'
+          ? (hit.corner === 'tl' || hit.corner === 'br' ? 'nwse-resize' : 'nesw-resize')
+          : 'move');
+  }
+
+  /* ---------- 取り込み ----------
+     カードの大きさに必要な解像度まで落として保存容量を抑える。 */
+  function importFile(file) {
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      var im = new Image();
+      im.onload = function () {
+        var size = cfg.getCardSize();
+        var maxSide = POPPresets.imageMaxSide(size);
+        var sc = Math.min(1, maxSide / Math.max(im.naturalWidth, im.naturalHeight));
+        var cw = Math.max(1, Math.round(im.naturalWidth * sc));
+        var ch = Math.max(1, Math.round(im.naturalHeight * sc));
+        var c = document.createElement('canvas');
+        c.width = cw; c.height = ch;
+        c.getContext('2d').drawImage(im, 0, 0, cw, ch);
+        var isPng = /image\/png/i.test(file.type || '');
+        var dataUrl;
+        try { dataUrl = isPng ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', 0.9); }
+        catch (e) { cfg.setStatus('画像を読み込めませんでした', true); return; }
+        var aspect = cw / ch;
+        var wMm = Math.round(size.w * 0.6);
+        cfg.getCard().image = {
+          src: dataUrl, aspect: aspect, wMm: wMm,
+          xMm: Math.round((size.w - wMm) / 2),
+          yMm: Math.round((size.h - wMm / aspect) / 2),
+          opacity: 1, layer: 'back'
+        };
+        ensure(dataUrl, function () { cfg.onChange(); });
+        cfg.setStatus('画像を追加しました', true);
+      };
+      im.onerror = function () { cfg.setStatus('画像を読み込めませんでした', true); };
+      im.src = String(reader.result);
+    };
+    reader.onerror = function () { cfg.setStatus('ファイルを読めませんでした', true); };
+    reader.readAsDataURL(file);
+  }
+
+  function clear() {
+    cfg.getCard().image = POPPresets.defaultCardState().image;
+    cfg.canvas.style.cursor = 'default';
+    cfg.onChange();
+    cfg.setStatus('画像を削除しました', true);
+  }
+
+  function init(o) {
+    cfg = o;
+    o.canvas.addEventListener('pointerdown', onPointerDown);
+    o.canvas.addEventListener('pointermove', onPointerMove);
+    o.canvas.addEventListener('pointerup', endDrag);
+    o.canvas.addEventListener('pointercancel', endDrag);
+  }
+
+  return {
+    init: init,
+    ensure: ensure,
+    assetsFor: assetsFor,
+    assetsForCards: assetsForCards,
+    waitForCard: waitForCard,
+    waitForCards: waitForCards,
+    clamp: clamp,
+    setEnabled: setEnabled,
+    drawHandles: drawHandles,
+    importFile: importFile,
+    clear: clear
+  };
+})();
+```
+
+- [ ] **Step 3: `assets/js/preset-ui.js` を作る**
+
+`app.js` から `renderPresetList` と、`btn-preset-save` / `preset-list` のクリックハンドラを移設する。
+プリセットは従来どおり**1カードぶんのデザイン**として扱う（読込＝選択中カードへ適用）。
+
+```javascript
+/* ===========================================================
+   「名前を付けて保存」したデザインの一覧と操作
+   プリセットは 1 カードぶんのデザイン。読込は選択中カードへ適用する。
+   =========================================================== */
+var POPPresetUI = (function () {
+  'use strict';
+
+  var cfg = null;         /* { getCard, applyCard, setStatus } */
+
+  function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function render() {
+    var ul = document.getElementById('preset-list');
+    var arr = POPStorage.listPresets();
+    if (!arr.length) {
+      ul.innerHTML = '<li class="presets__empty">保存されたデザインはありません</li>';
+      return;
+    }
+    ul.innerHTML = arr.map(function (p) {
+      var n = esc(p.name);
+      return '<li><span title="' + n + '">' + n + '</span>' +
+        '<button type="button" class="btn btn--sm" data-preset-load="' + n + '">読込</button>' +
+        '<button type="button" class="btn btn--sm btn--ghost" data-preset-del="' + n + '">削除</button></li>';
+    }).join('');
+  }
+
+  function bind() {
+    document.getElementById('btn-preset-save').addEventListener('click', function () {
+      var input = document.getElementById('preset-name');
+      var card = cfg.getCard();
+      /* 改行・連続空白を1つに正規化（HTML属性値の空白正規化で読込/削除がズレるのを防ぐ） */
+      var fallback = String(card.name.text || '').replace(/\s+/g, ' ').trim().slice(0, 20);
+      var name = input.value.replace(/\s+/g, ' ').trim() || fallback || '無題';
+      POPStorage.savePreset(name, JSON.parse(JSON.stringify(card)));
+      input.value = '';
+      render();
+      cfg.setStatus('「' + name + '」を保存しました', true);
+    });
+
+    document.getElementById('preset-list').addEventListener('click', function (ev) {
+      var loadBtn = ev.target.closest('[data-preset-load]');
+      var delBtn = ev.target.closest('[data-preset-del]');
+      if (loadBtn) {
+        var name = loadBtn.getAttribute('data-preset-load');
+        var found = POPStorage.listPresets().filter(function (p) { return p.name === name; })[0];
+        if (found) {
+          cfg.applyCard(found.state);
+          cfg.setStatus('「' + name + '」を読み込みました', true);
+        }
+      } else if (delBtn) {
+        POPStorage.deletePreset(delBtn.getAttribute('data-preset-del'));
+        render();
+      }
+    });
+  }
+
+  function init(o) { cfg = o; bind(); render(); }
+
+  return { init: init, render: render };
+})();
+```
+
+- [ ] **Step 4: `app.js` から移設分を削除する**
+
+`app.js` から次を**削除**する（Step 2・3 で移設済み）。
+
+- `var imgCache = {}; var imgLoading = {};` と `ensureImage` / `withAssets`
+- `imgRectPx` / `drawImageHandles` / `eventToMm` / `imageHitTest` / `var imgDrag = null;` /
+  `onImagePointerDown` / `clampImage` / `onImagePointerMove` / `endImageDrag` /
+  `updateImageCursor` / `importImageFile`
+- `renderPresetList`
+- `bindEvents()` の中の `canvas.addEventListener('pointerdown'...)` 〜 `'pointercancel'` の4行
+- `bindEvents()` の中の `btn-preset-save` と `preset-list` のクリックハンドラ
+
+`var autosaveWarned = false;` は `app.js` に残す。
+
+- [ ] **Step 5: `app.js` の状態をドキュメントに差し替える**
 
 `var state = POPPresets.sampleState();` を次で置き換える。
 
@@ -1541,12 +1924,27 @@ git commit -m "feat: シート合成描画を追加
      そのまま「選択中のカード」に効く。 */
   var doc = POPDoc.sampleDoc();
   var state = POPDoc.activeCard(doc);
+  var autosaveWarned = false;
 
   function cardSizeMm() { return POPPresets.cardSize(doc.card); }
+
+  /** カードごとの画像アセット（今読み込めているぶんだけ） */
+  function assetsByCard() { return POPImageTool.assetsForCards(doc.cards); }
 
   function selectCard(index) {
     doc.activeIndex = Math.max(0, Math.min(index, doc.cards.length - 1));
     state = POPDoc.activeCard(doc);
+    refreshAll();
+  }
+
+  /** 読み込んだ1カードぶんのデザインを選択中カードへ適用する（プリセット読込用） */
+  function applyCardState(cardState) {
+    var base = POPPresets.defaultCardState();
+    POPDoc.mergeDeep(base, cardState);
+    delete base.paper;                 /* 旧プリセットは paper を持つ場合がある */
+    doc.cards[doc.activeIndex] = base;
+    state = POPDoc.activeCard(doc);
+    POPImageTool.clamp();
     refreshAll();
   }
 
@@ -1557,9 +1955,7 @@ git commit -m "feat: シート合成描画を追加
   }
 ```
 
-- [ ] **Step 3: 用紙寸法の参照をカード寸法に置き換える**
-
-`app.js` 内の `POPPresets.paperSize(state)` は 4 か所（`render` / `printPop` / `imgRectPx` の呼び出し元 / `importImageFile`）と、`eventToMm` にある。すべて `cardSizeMm()` に置き換える。
+- [ ] **Step 6: 用紙寸法の参照をカード寸法に置き換える**
 
 `render()` の冒頭 `var size = POPPresets.paperSize(state);` を次にする。
 
@@ -1567,25 +1963,36 @@ git commit -m "feat: シート合成描画を追加
     var size = cardSizeMm();
 ```
 
-`render()` の描画呼び出しに寸法を渡す。
+`render()` の描画呼び出しとハンドル描画を次にする。
 
 ```javascript
+    var assets = POPImageTool.assetsFor(state);
     var result = POPRenderer.draw(ctx, state, canvas.width / size.w, assets, size);
+    POPImageTool.drawHandles();   /* 画像の選択枠＋四隅ハンドル（プレビューのみ） */
 ```
 
 `render()` のメタ表示（`var paper = POPPresets.papersById[state.paper.id];` から
 `(state.paper.orientation === 'landscape' ? '横' : '縦');` までの4行）を次で置き換える。
 
 ```javascript
-    var cardDef = POPPresets.cardSizesById[doc.card.id];
+    var sheet = POPPresets.sheetSize(doc.sheet);
     var L = POPSheetView.layoutOf(doc);
     var pages = POPSheetView.pagesOf(doc);
     metaEl.textContent =
-      'カード ' + size.w + '×' + size.h + 'mm' +
-      (cardDef && cardDef.id !== 'custom' ? '（' + cardDef.label.replace(/（.*/, '') + '）' : '') +
-      ' / ' + (L.perPage > 0 ? POPPresets.sheetSize(doc.sheet).w + '×' +
-               POPPresets.sheetSize(doc.sheet).h + 'mm に ' + L.perPage + '枚' : '配置できません') +
+      'カード ' + size.w + '×' + size.h + 'mm / ' +
+      (L.perPage > 0 ? sheet.w + '×' + sheet.h + 'mm に ' + L.perPage + '枚' : '配置できません') +
       ' / カード' + doc.cards.length + '枚・全' + pages + 'ページ';
+```
+
+`render()` の `ensureImageThenRerender()` を次で置き換える。
+
+```javascript
+  /* 画像が未ロードなら読み込んでから描き直す */
+  function ensureImageThenRerender() {
+    var src = state.image && state.image.src;
+    if (!src) return;
+    POPImageTool.ensure(src, function () { requestRender(); });
+  }
 ```
 
 `render()` の自動保存を doc にする。
@@ -1600,41 +2007,35 @@ git commit -m "feat: シート合成描画を追加
     }
 ```
 
-- [ ] **Step 4: 画像まわりを presets の共通関数に寄せる**
+- [ ] **Step 7: 書き出しをカード寸法対応にする**
 
-`app.js` の `function clampImage() { ... }` の**関数まるごと**を次で置き換える。
-
-```javascript
-  /* 画像をカード内へ収める（実体は presets.js に移設済み） */
-  function clampImage() {
-    POPPresets.clampImage(state.image, cardSizeMm());
-  }
-```
-
-`importImageFile` の `var maxSide = 2000;` を次にする。
+`exportPng()` の `POPRenderer.renderToCanvas(state, dpi, assets)` を次にする。
 
 ```javascript
-        var cardMm = cardSizeMm();
-        var maxSide = POPPresets.imageMaxSide(cardMm);
+      var cv = POPRenderer.renderToCanvas(state, dpi, assets, cardSizeMm());
 ```
 
-同関数の `var size = POPPresets.paperSize(state);` を次にする。
+`exportPng()` と `printPop()` の `withAssets(function (assets) {` を次にする（2か所）。
 
 ```javascript
-        var size = cardMm;
+     POPImageTool.waitForCard(state, function (assets) {
 ```
 
-`btn-image-del` のハンドラ内 `state.image = POPPresets.defaultState().image;` を次にする。
+`printPop()` の `var size = POPPresets.paperSize(state);` を次にする。
 
 ```javascript
-      state.image = POPPresets.defaultCardState().image;
+      var size = cardSizeMm();
 ```
 
-`imgRectPx` / `eventToMm` / `imageHitTest` / `onImagePointerDown` / `onImagePointerMove` の中で
-`POPPresets.paperSize(state)` を呼んでいる箇所があれば `cardSizeMm()` に置き換える
-（`grep -n "paperSize" assets/js/app.js` で残りを確認すること）。
+`printPop()` の `POPRenderer.renderToCanvas(state, 300, assets).toDataURL('image/png')` を次にする。
 
-- [ ] **Step 5: `syncUI()` をドキュメント対応にする**
+```javascript
+      var url = POPRenderer.renderToCanvas(state, 300, assets, size).toDataURL('image/png');
+```
+
+> このタスクの印刷はまだ「カード1枚」のまま。シート単位への切り替えは Task 9。
+
+- [ ] **Step 8: `syncUI()` をドキュメント対応にする**
 
 `syncUI()` の中の `document.getElementById('custom-size').hidden = state.paper.id !== 'custom';` を次で置き換える。
 
@@ -1656,7 +2057,7 @@ git commit -m "feat: シート合成描画を追加
     if (sheetCustom) sheetCustom.hidden = doc.sheet.id !== 'custom';
 ```
 
-- [ ] **Step 6: 入力ハンドラを doc 対応にする**
+- [ ] **Step 9: 入力ハンドラを doc 対応にする**
 
 `bindEvents()` の中の `function onFieldChange(ev) { ... }` を次で置き換える。
 
@@ -1675,16 +2076,11 @@ git commit -m "feat: シート合成描画を追加
       var path = el.getAttribute('data-path');
       if (!path) return;
       setPath(state, path, parseValue(el));
-      if (path.indexOf('image.') === 0) clampImage();   /* 幅・X・Y の直接入力もクランプ */
+      if (path.indexOf('image.') === 0) POPImageTool.clamp();  /* 幅・X・Y の直接入力もクランプ */
       refreshAll();
     }
-```
 
-`bindEvents()` の中（`onFieldChange` の直後）に追加する。Task 10 で比例スケールを足すので、
-今は正規化と再描画だけ行う。
-
-```javascript
-    /* カード/シート設定が変わったときの後処理 */
+    /* カード/シート設定が変わったときの後処理。Task 10 で比例スケールが加わる。 */
     function onDocChange(docPath) {
       doc.sheet.margin = Math.max(0, Math.min(30, Number(doc.sheet.margin) || 0));
       doc.sheet.gap = Math.max(0, Math.min(20, Number(doc.sheet.gap) || 0));
@@ -1693,28 +2089,34 @@ git commit -m "feat: シート合成描画を追加
         doc.card.customW = c.customW;
         doc.card.customH = c.customH;
       }
-      clampImage();
+      POPImageTool.clamp();
       refreshAll();
     }
 ```
 
-- [ ] **Step 7: `init()` を移行対応にする**
-
-`init()` の `var saved = POPStorage.loadAuto();` と次の行を、次で置き換える。
+`bindEvents()` の画像ボタンのハンドラを次で置き換える。
 
 ```javascript
-    /* ①新形式 → ②旧形式（単品）を移行 → ③サンプル の順に復元する */
-    var restored = POPDoc.migrate(POPStorage.loadAuto());
-    if (!restored) restored = POPDoc.migrate(POPStorage.loadLegacyAuto());
-    doc = restored || POPDoc.sampleDoc();
-    state = POPDoc.activeCard(doc);
+    document.getElementById('btn-image-add').addEventListener('click', function () {
+      document.getElementById('file-image').click();
+    });
+    document.getElementById('file-image').addEventListener('change', function (ev) {
+      var file = ev.target.files && ev.target.files[0];
+      autosaveWarned = false;
+      POPImageTool.importFile(file);
+      ev.target.value = '';
+    });
+    document.getElementById('btn-image-del').addEventListener('click', function () {
+      autosaveWarned = false;
+      POPImageTool.clear();
+    });
 ```
 
-- [ ] **Step 8: JSON 保存／読込を doc にする**
+- [ ] **Step 10: JSON 保存／読込・リセットを doc にする**
 
-`bindEvents()` の `btn-save-json` と `btn-load-json` のハンドラを探し、
-`POPStorage.exportJson(state, ...)` を `POPStorage.exportJson(doc, ...)` に、
-読込側の `mergeDeep(POPPresets.defaultState(), data)` を次に置き換える。
+`btn-save-json` のハンドラの `POPStorage.exportJson(state, ...)` を `POPStorage.exportJson(doc, ...)` にする。
+
+`file-json` の `change` ハンドラの `.then(function (data) { ... })` の中身を次で置き換える。
 
 ```javascript
         var loaded = POPDoc.migrate(data);
@@ -1726,37 +2128,82 @@ git commit -m "feat: シート合成描画を追加
         setStatus('データを読み込みました', true);
 ```
 
-`btn-reset` のハンドラも次に置き換える。
+`btn-reset` のハンドラの中身を次で置き換える。
 
 ```javascript
+      if (!confirm('入力内容をすべて初期状態に戻します。よろしいですか？')) return;
       doc = POPDoc.defaultDoc();
       state = POPDoc.activeCard(doc);
       POPStorage.clearAuto();
       autosaveWarned = false;
       refreshAll();
-      setStatus('内容を消去しました', true);
+      setStatus('リセットしました', true);
 ```
 
-`safeFileName()` はそのまま（選択中カードの商品名を使う）。
+- [ ] **Step 11: `init()` を移行対応にし、切り出したモジュールを初期化する**
 
-- [ ] **Step 9: 残りの `state.paper` 参照を潰す**
+`init()` の `var saved = POPStorage.loadAuto();` と次の行を、次で置き換える。
 
-Run: `grep -n "state.paper\|paperSize(state)\|defaultState()" assets/js/app.js`
-Expected: 1件も出ない。出たら Step 3〜8 の要領で `cardSizeMm()` / `POPPresets.defaultCardState()` に置き換える。
+```javascript
+    /* ①新形式 → ②旧形式（単品）を移行 → ③サンプル の順に復元する */
+    var restored = POPDoc.migrate(POPStorage.loadAuto());
+    if (!restored) restored = POPDoc.migrate(POPStorage.loadLegacyAuto());
+    doc = restored || POPDoc.sampleDoc();
+    state = POPDoc.activeCard(doc);
 
-- [ ] **Step 10: テストとブラウザで確認する**
+    POPImageTool.init({
+      canvas: canvas,
+      ctx: ctx,
+      getCard: function () { return state; },
+      getCardSize: cardSizeMm,
+      onChange: function () { refreshAll(); },
+      setStatus: setStatus
+    });
+    POPPresetUI.init({
+      getCard: function () { return state; },
+      applyCard: applyCardState,
+      setStatus: setStatus
+    });
+```
+
+`init()` の `renderPresetList();` の行を削除する（`POPPresetUI.init` が最初の描画をする）。
+
+- [ ] **Step 12: `index.html` に読み込みを追加する**
+
+`storage.js` の次の行に2行追加する。最終的な並びは
+`... sheet-view.js → doc.js → storage.js → image-tool.js → preset-ui.js → app.js`。
+
+```html
+<script src="assets/js/image-tool.js"></script>
+<script src="assets/js/preset-ui.js"></script>
+```
+
+- [ ] **Step 13: 残った旧参照と行数を確認する**
+
+Run: `grep -n "state.paper\|paperSize(state)\|POPPresets.defaultState()\|imgCache\|renderPresetList\|importImageFile" assets/js/app.js`
+Expected: 1件も出ない。
+
+Run: `wc -l assets/js/app.js assets/js/image-tool.js assets/js/preset-ui.js`
+Expected: `app.js` が **700行未満**、他の2つも 800行未満。
+
+- [ ] **Step 14: テストとブラウザで確認する**
 
 Run: `node test/run.js`
 Expected: `73 passed, 0 failed`（`mergeDeep` / `parseValue` の抽出が壊れていないことの確認）。
+
+> `test/run.js` は `app.js` から正規表現で `mergeDeep` と `parseValue` を抜き出している。
+> この2関数は `app.js` に残すこと（移設すると抽出が失敗してテストが落ちる）。
 
 ブラウザで `index.html` を開いて確認する。
 
 1. **44×67mm のポップが1枚**表示される（従来の A4 ではなくなっている）
 2. 文字を入力するとプレビューに反映される
-3. 画像を追加し、ドラッグで動かせる／四隅でリサイズできる
-4. 「データ保存」で JSON が落ち、「データ読込」で復元できる
-5. **旧データの移行**: DevTools のコンソールで次を実行してからリロードし、
-   A4 サイズのカードが1枚復元されること（＝従来と同じ見た目）を確認する。
+3. 画像を追加でき、ドラッグで動かせる／四隅でリサイズできる／削除できる
+4. 「名前を付けて保存」でデザインを保存でき、一覧から読込・削除ができる
+5. 「データ保存」で JSON が落ち、「データ読込」で復元できる
+6. 「リセット」で初期状態に戻る
+7. **旧データの移行**: DevTools のコンソールで次を実行してからリロードし、
+   A5 サイズのカードが1枚復元されること（＝従来と同じ見た目）を確認する。
 
 ```javascript
 localStorage.removeItem('popmaker.doc.v2');
@@ -1773,16 +2220,20 @@ localStorage.setItem('popmaker.autosave.v1', JSON.stringify({
 期待: リロード後に「移行テスト ¥500」が **148×210mm のカード1枚**として表示され、
 メタ表示が「カード 148×210mm / 148×210mm に 1枚 / カード1枚・全1ページ」になる。
 
-- [ ] **Step 11: コミット**
+- [ ] **Step 15: コミット**
 
 ```bash
-git add assets/js/app.js assets/js/storage.js index.html
-git commit -m "refactor: 状態をカード集ドキュメントへ移行
+git add assets/js/app.js assets/js/image-tool.js assets/js/preset-ui.js assets/js/storage.js index.html
+git commit -m "refactor: 状態をカード集ドキュメントへ移行し app.js を分割
 
 state を doc.cards[activeIndex] への参照として残すことで、既存の
 編集パネルとイベント配線をそのまま選択中カードに効かせる。
 用紙寸法の参照はすべてカード寸法に置き換え、自動保存キーを v2 化。
-旧形式は起動時に読み替えるので既存データはそのまま開ける。"
+旧形式は起動時に読み替えるので既存データはそのまま開ける。
+
+app.js が800行の上限に達していたため、画像操作を image-tool.js、
+デザインのプリセット一覧を preset-ui.js へ責務ごと切り出した。
+移設した処理のロジックは変えていない。"
 ```
 
 ---
@@ -2044,11 +2495,7 @@ var POPCardsUI = (function () {
     POPCardsUI.init({
       root: document.getElementById('card-list'),
       getDoc: function () { return doc; },
-      getAssets: function () {
-        return doc.cards.map(function (c) {
-          return { image: (c.image && c.image.src) ? (imgCache[c.image.src] || null) : null };
-        });
-      },
+      getAssets: assetsByCard,
       onSelect: selectCard,
       onAdd: function () {
         var size = cardSizeMm();
@@ -2174,13 +2621,6 @@ git commit -m "feat: カード一覧UIを追加
   /* プレビューの表示モードとページ */
   var previewMode = 'card';   /* 'card' | 'sheet' */
   var pageIndex = 0;
-
-  /* カードごとの画像アセット（読み込み済みのみ） */
-  function assetsByCard() {
-    return doc.cards.map(function (c) {
-      return { image: (c.image && c.image.src) ? (imgCache[c.image.src] || null) : null };
-    });
-  }
 ```
 
 `function render() {` の中身を、次で置き換える（メタ表示・自動保存・遅延ロードは共通のまま残す）。
@@ -2208,9 +2648,8 @@ git commit -m "feat: カード一覧UIを追加
       POPSheetView.drawSheet(ctx, doc, pageIndex, pxPerMm, assetsByCard(),
                              { highlightIndex: doc.activeIndex });
     } else {
-      var assets = { image: (state.image && state.image.src) ? (imgCache[state.image.src] || null) : null };
-      result = POPRenderer.draw(ctx, state, pxPerMm, assets, size);
-      drawImageHandles(size);   /* 画像の選択枠＋四隅ハンドル（プレビューのみ） */
+      result = POPRenderer.draw(ctx, state, pxPerMm, POPImageTool.assetsFor(state), size);
+      POPImageTool.drawHandles();   /* 画像の選択枠＋四隅ハンドル（プレビューのみ） */
     }
 
     updateMeta(result);
@@ -2295,8 +2734,8 @@ git commit -m "feat: カード一覧UIを追加
         tabs[i].classList.toggle('is-active', on);
         tabs[i].setAttribute('aria-selected', on ? 'true' : 'false');
       }
-      /* シート表示中は画像ハンドルを操作させない */
-      canvas.style.cursor = 'default';
+      /* シート表示中は画像の操作を止める */
+      POPImageTool.setEnabled(previewMode === 'card');
       requestRender();
     });
 
@@ -2323,19 +2762,8 @@ git commit -m "feat: カード一覧UIを追加
     });
 ```
 
-`onImagePointerDown` の先頭に、シート表示中は何もしないガードを足す。
-
-```javascript
-  function onImagePointerDown(ev) {
-    if (previewMode !== 'card') return;
-```
-
-`updateImageCursor` の先頭にも同じガードを足す。
-
-```javascript
-  function updateImageCursor(ev) {
-    if (previewMode !== 'card') { canvas.style.cursor = 'default'; return; }
-```
+画像操作の抑止は `POPImageTool.setEnabled()` が担うので、`app.js` 側に個別のガードは足さない
+（`image-tool.js` の `onPointerDown` / `updateCursor` / `drawHandles` が `enabled` を見ている）。
 
 - [ ] **Step 5: ブラウザで確認する**
 
@@ -2393,36 +2821,12 @@ git commit -m "feat: シートタブ（面付けプレビュー）を追加
 </label>
 ```
 
-- [ ] **Step 2: 全カードの画像を待ってから書き出すヘルパを足す**
+- [ ] **Step 2: 全カードのフォントを集めるヘルパを足す**
 
-`app.js` の `function withAssets(cb) { ... }` を次で置き換える。
+画像の待ち合わせは `POPImageTool.waitForCard` / `waitForCards`（Task 6 で用意済み）を使う。
+フォントだけここに足す。`app.js` の `function safeFileName()` の**直前**に追加する。
 
 ```javascript
-  /* 書き出し用：選択中カードの画像が読み込めてから assets を渡す */
-  function withAssets(cb) {
-    var src = state.image && state.image.src;
-    if (!src) { cb({ image: null }); return; }
-    ensureImage(src, function (img) { cb({ image: img }); });
-  }
-
-  /* 書き出し用：全カードの画像が読み込めてから assetsByCard を渡す。
-     読み込めなかった画像は null のまま進める（描画されないだけで処理は止めない）。 */
-  function withAllAssets(cb) {
-    var srcs = [];
-    doc.cards.forEach(function (c) {
-      var s = c.image && c.image.src;
-      if (s && srcs.indexOf(s) < 0) srcs.push(s);
-    });
-    if (!srcs.length) { cb(assetsByCard()); return; }
-    var remaining = srcs.length;
-    srcs.forEach(function (s) {
-      ensureImage(s, function () {
-        remaining--;
-        if (remaining === 0) cb(assetsByCard());
-      });
-    });
-  }
-
   /* 全カードで使われているフォント（Webフォント読み込み用） */
   function allUsedFonts() {
     var out = [];
@@ -2451,7 +2855,7 @@ git commit -m "feat: シートタブ（面付けプレビュー）を追加
 
     setStatus('印刷を準備中…');
     POPFonts.ensureAll(allUsedFonts()).then(function () {
-      withAllAssets(function (assetsList) {
+      POPImageTool.waitForCards(doc.cards, function (assetsList) {
         var sheet = POPPresets.sheetSize(doc.sheet);
         var urls = [];
 
@@ -2539,7 +2943,7 @@ git commit -m "feat: シートタブ（面付けプレビュー）を追加
     if (target === 'card') {
       setStatus('画像を作成中…');
       POPFonts.ensureAll(POPRenderer.usedFonts(state)).then(function () {
-        withAssets(function (assets) {
+        POPImageTool.waitForCard(state, function (assets) {
           saveCanvas(POPRenderer.renderToCanvas(state, dpi, assets, cardSizeMm()),
                      safeFileName() + '_' + dpi + 'dpi.png');
         });
@@ -2552,7 +2956,7 @@ git commit -m "feat: シートタブ（面付けプレビュー）を追加
 
     setStatus('画像を作成中…');
     POPFonts.ensureAll(allUsedFonts()).then(function () {
-      withAllAssets(function (assetsList) {
+      POPImageTool.waitForCards(doc.cards, function (assetsList) {
         var targets = allPages ? [] : [pageIndex];
         if (allPages) { for (var i = 0; i < pages; i++) targets.push(i); }
         if (targets.length > 1) {
