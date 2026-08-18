@@ -5,7 +5,40 @@
   'use strict';
 
   /* ---------- 状態 ---------- */
-  var state = POPPresets.sampleState();
+  /* ドキュメント（カード集）と、選択中カードへの参照。
+     state を参照のまま残すことで、既存の編集パネル・イベント配線が
+     そのまま「選択中のカード」に効く。 */
+  var doc = POPDoc.sampleDoc();
+  var state = POPDoc.activeCard(doc);
+  var autosaveWarned = false;
+
+  function cardSizeMm() { return POPPresets.cardSize(doc.card); }
+
+  /** カードごとの画像アセット（今読み込めているぶんだけ） */
+  function assetsByCard() { return POPImageTool.assetsForCards(doc.cards); }
+
+  function selectCard(index) {
+    doc.activeIndex = Math.max(0, Math.min(index, doc.cards.length - 1));
+    state = POPDoc.activeCard(doc);
+    refreshAll();
+  }
+
+  /** 読み込んだ1カードぶんのデザインを選択中カードへ適用する（プリセット読込用） */
+  function applyCardState(cardState) {
+    var base = POPPresets.defaultCardState();
+    POPDoc.mergeDeep(base, cardState);
+    delete base.paper;                 /* 旧プリセットは paper を持つ場合がある */
+    doc.cards[doc.activeIndex] = base;
+    state = POPDoc.activeCard(doc);
+    POPImageTool.clamp();
+    refreshAll();
+  }
+
+  /* 画面全体を現在の doc に合わせ直す。Task 7 でカード一覧の更新が加わる。 */
+  function refreshAll() {
+    syncUI();
+    requestRender();
+  }
 
   var canvas = document.getElementById('canvas');
   var ctx = canvas.getContext('2d');
@@ -207,7 +240,21 @@
       outs[j].textContent = (typeof val === 'number') ? String(Math.round(val * 100) / 100) : String(val || '');
     }
 
-    document.getElementById('custom-size').hidden = state.paper.id !== 'custom';
+    /* カード/シートの設定は doc 側にあるので data-doc-path で別に同期する */
+    var docInputs = document.querySelectorAll('[data-doc-path]');
+    for (var d = 0; d < docInputs.length; d++) {
+      var de = docInputs[d];
+      if (de === document.activeElement &&
+          (de.type === 'text' || de.type === 'number')) continue;
+      var dv = getPath(doc, de.getAttribute('data-doc-path'));
+      if (de.type === 'checkbox') de.checked = !!dv;
+      else de.value = (dv === undefined || dv === null) ? '' : dv;
+    }
+
+    var cardCustom = document.getElementById('card-custom-size');
+    if (cardCustom) cardCustom.hidden = doc.card.id !== 'custom';
+    var sheetCustom = document.getElementById('custom-size');
+    if (sheetCustom) sheetCustom.hidden = doc.sheet.id !== 'custom';
 
     var imgCtl = document.getElementById('image-controls');
     if (imgCtl) imgCtl.hidden = !(state.image && state.image.src);
@@ -216,29 +263,6 @@
     for (var t = 0; t < tpl.length; t++) {
       tpl[t].classList.toggle('is-active', tpl[t].getAttribute('data-template') === state.template);
     }
-  }
-
-  /* ---------- 画像（読み込みキャッシュ・フォントと同じ遅延ロード方式） ---------- */
-  var imgCache = {};
-  var imgLoading = {};
-  var autosaveWarned = false;
-
-  function ensureImage(src, cb) {
-    if (!src) { if (cb) cb(null); return; }
-    if (imgCache[src]) { if (cb) cb(imgCache[src]); return; }
-    if (imgLoading[src]) return;      /* 二重ロード防止（onload 完了時に再描画される） */
-    imgLoading[src] = true;
-    var im = new Image();
-    im.onload = function () { imgCache[src] = im; delete imgLoading[src]; if (cb) cb(im); };
-    im.onerror = function () { delete imgLoading[src]; if (cb) cb(null); };
-    im.src = src;
-  }
-
-  /* 書き出し用：画像が読み込めてから assets を渡す */
-  function withAssets(cb) {
-    var src = state.image && state.image.src;
-    if (!src) { cb({ image: null }); return; }
-    ensureImage(src, function (img) { cb({ image: img }); });
   }
 
   /* ---------- 描画 ---------- */
@@ -254,7 +278,7 @@
   }
 
   function render() {
-    var size = POPPresets.paperSize(state);
+    var size = cardSizeMm();
     var stageW = Math.max(120, stage.clientWidth - 44);
     var maxH = Math.max(260, window.innerHeight - 230);
     var dispW = Math.min(stageW, maxH * (size.w / size.h), 660);
@@ -267,14 +291,17 @@
     canvas.height = Math.round(dispH * dpr);
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    var assets = { image: (state.image && state.image.src) ? (imgCache[state.image.src] || null) : null };
-    var result = POPRenderer.draw(ctx, state, canvas.width / size.w, assets);
-    drawImageHandles(size);   /* 画像の選択枠＋四隅ハンドル（プレビューのみ・書き出しには出ない） */
+    var assets = POPImageTool.assetsFor(state);
+    var result = POPRenderer.draw(ctx, state, canvas.width / size.w, assets, size);
+    POPImageTool.drawHandles();   /* 画像の選択枠＋四隅ハンドル（プレビューのみ） */
 
-    var paper = POPPresets.papersById[state.paper.id];
-    metaEl.textContent = (paper ? paper.label.replace(/（.*/, '') : '') +
-      ' / ' + size.w + '×' + size.h + 'mm / ' +
-      (state.paper.orientation === 'landscape' ? '横' : '縦');
+    var sheet = POPPresets.sheetSize(doc.sheet);
+    var L = POPSheetView.layoutOf(doc);
+    var pages = POPSheetView.pagesOf(doc);
+    metaEl.textContent =
+      'カード ' + size.w + '×' + size.h + 'mm / ' +
+      (L.perPage > 0 ? sheet.w + '×' + sheet.h + 'mm に ' + L.perPage + '枚' : '配置できません') +
+      ' / カード' + doc.cards.length + '枚・全' + pages + 'ページ';
 
     /* スクリーンリーダー向けに現在の内容を要約 */
     canvas.setAttribute('aria-label',
@@ -288,18 +315,20 @@
     ensureImageThenRerender();
     ensureFontsThenRerender();
 
-    var saved = POPStorage.saveAuto(state);
-    if (!saved && state.image && state.image.src && !autosaveWarned) {
+    var saved = POPStorage.saveAuto(doc);
+    if (!saved && !autosaveWarned) {
       autosaveWarned = true;
-      setStatus('画像が大きく自動保存できません。「データ保存」で書き出せます', true);
+      var imgCount = doc.cards.filter(function (c) { return c.image && c.image.src; }).length;
+      setStatus('カード' + doc.cards.length + '枚・画像' + imgCount +
+                '点のため自動保存できません。「データ保存」で書き出せます', true);
     }
   }
 
   /* 画像が未ロードなら読み込んでから描き直す */
   function ensureImageThenRerender() {
     var src = state.image && state.image.src;
-    if (!src || imgCache[src]) return;
-    ensureImage(src, function () { requestRender(); });
+    if (!src) return;
+    POPImageTool.ensure(src, function () { requestRender(); });
   }
 
   /* 使用中のWebフォントが未読み込みなら読み込んでから描き直す */
@@ -343,8 +372,8 @@
     setStatus('画像を作成中…');
     /* 描画前にフォント・画像の読み込みを待つ */
     POPFonts.ensureAll(POPRenderer.usedFonts(state)).then(function () {
-     withAssets(function (assets) {
-      var cv = POPRenderer.renderToCanvas(state, dpi, assets);
+     POPImageTool.waitForCard(state, function (assets) {
+      var cv = POPRenderer.renderToCanvas(state, dpi, assets, cardSizeMm());
       var done = function (blob) {
         POPStorage.download(blob, safeFileName() + '_' + dpi + 'dpi.png');
         setStatus('PNGを保存しました', true);
@@ -376,9 +405,9 @@
   function printPop() {
     setStatus('印刷を準備中…');
     POPFonts.ensureAll(POPRenderer.usedFonts(state)).then(function () {
-     withAssets(function (assets) {
-      var size = POPPresets.paperSize(state);
-      var url = POPRenderer.renderToCanvas(state, 300, assets).toDataURL('image/png');
+     POPImageTool.waitForCard(state, function (assets) {
+      var size = cardSizeMm();
+      var url = POPRenderer.renderToCanvas(state, 300, assets, size).toDataURL('image/png');
 
       var frame = document.createElement('iframe');
       frame.setAttribute('aria-hidden', 'true');
@@ -416,196 +445,6 @@
     });
   }
 
-  /* ---------- 画像の配置・操作（プレビュー上でドラッグ移動／四隅リサイズ） ---------- */
-  /* 現在の状態から画像の矩形（プレビュー canvas のバッキングpx）を得る */
-  function imgRectPx(size) {
-    var im = state.image;
-    var s = canvas.width / size.w;                 /* バッキングpx / mm */
-    var w = im.wMm * s;
-    var h = (im.wMm / (im.aspect || 1)) * s;
-    return { x: (im.xMm || 0) * s, y: (im.yMm || 0) * s, w: w, h: h, s: s };
-  }
-
-  /* 選択枠＋四隅ハンドルをプレビューに重ね描き（書き出しには出さない） */
-  function drawImageHandles(size) {
-    var im = state.image;
-    if (!im || !im.src || !(im.wMm > 0)) return;
-    var r = imgRectPx(size);
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.strokeStyle = '#2b6cb0';
-    ctx.lineWidth = Math.max(1, r.s * 0.4);
-    ctx.setLineDash([r.s * 1.6, r.s * 1.2]);
-    ctx.strokeRect(r.x, r.y, r.w, r.h);
-    ctx.setLineDash([]);
-    var hs = Math.max(7, r.s * 3);                  /* ハンドル一辺（バッキングpx） */
-    [[r.x, r.y], [r.x + r.w, r.y], [r.x, r.y + r.h], [r.x + r.w, r.y + r.h]].forEach(function (c) {
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.rect(c[0] - hs / 2, c[1] - hs / 2, hs, hs);
-      ctx.fill();
-      ctx.stroke();
-    });
-    ctx.restore();
-  }
-
-  /* ポインタ座標 → mm（用紙左上基準） */
-  function eventToMm(ev) {
-    var rect = canvas.getBoundingClientRect();
-    var size = POPPresets.paperSize(state);
-    return {
-      x: (ev.clientX - rect.left) / rect.width * size.w,
-      y: (ev.clientY - rect.top) / rect.height * size.h
-    };
-  }
-
-  /* mm 座標が画像のどこに当たるか（四隅ハンドル / 内部 / 外） */
-  function imageHitTest(mm) {
-    var im = state.image;
-    if (!im || !im.src || !(im.wMm > 0)) return null;
-    var hMm = im.wMm / (im.aspect || 1);
-    var size = POPPresets.paperSize(state);
-    var tol = Math.max(size.w, size.h) * 0.035 + 2;     /* 指でも掴める余裕 */
-    var corners = {
-      tl: [im.xMm, im.yMm], tr: [im.xMm + im.wMm, im.yMm],
-      bl: [im.xMm, im.yMm + hMm], br: [im.xMm + im.wMm, im.yMm + hMm]
-    };
-    for (var key in corners) {
-      if (Math.abs(mm.x - corners[key][0]) < tol && Math.abs(mm.y - corners[key][1]) < tol) {
-        return { type: 'corner', corner: key };
-      }
-    }
-    if (mm.x >= im.xMm && mm.x <= im.xMm + im.wMm && mm.y >= im.yMm && mm.y <= im.yMm + hMm) {
-      return { type: 'inside' };
-    }
-    return null;
-  }
-
-  var imgDrag = null;
-
-  function onImagePointerDown(ev) {
-    var mm = eventToMm(ev);
-    var hit = imageHitTest(mm);
-    if (!hit) return;
-    ev.preventDefault();
-    try { canvas.setPointerCapture(ev.pointerId); } catch (e) { /* noop */ }
-    var im = state.image;
-    if (hit.type === 'corner') {
-      var hMm = im.wMm / (im.aspect || 1);
-      var left = hit.corner.indexOf('l') >= 0, top = hit.corner.indexOf('t') >= 0;
-      /* 反対側の角を固定点（anchor）にしてアスペクト維持リサイズ */
-      imgDrag = { mode: 'resize', left: left, top: top,
-                  anchor: { x: left ? im.xMm + im.wMm : im.xMm, y: top ? im.yMm + hMm : im.yMm } };
-    } else {
-      imgDrag = { mode: 'move', dx: mm.x - im.xMm, dy: mm.y - im.yMm };
-    }
-  }
-
-  /* 画像を用紙外へ逃がしすぎないようクランプ（掴めなくなるのを防ぐ）。
-     ブリード（端の外へ少しはみ出す）は許容しつつ、各辺に最低 keep mm は
-     用紙内へ残す。幅はUIスライダーと同じ 10〜600mm に収める。 */
-  function clampImage() {
-    var im = state.image;
-    if (!im || !im.src) return;
-    var size = POPPresets.paperSize(state);
-    im.wMm = Math.max(10, Math.min(600, Number(im.wMm) || 10));
-    var hMm = im.wMm / (im.aspect || 1);
-    var keep = Math.min(20, im.wMm, hMm);
-    im.xMm = Math.max(keep - im.wMm, Math.min(size.w - keep, im.xMm));
-    im.yMm = Math.max(keep - hMm, Math.min(size.h - keep, im.yMm));
-  }
-
-  function onImagePointerMove(ev) {
-    if (!imgDrag) { updateImageCursor(ev); return; }
-    ev.preventDefault();
-    var im = state.image, mm = eventToMm(ev);
-    if (imgDrag.mode === 'move') {
-      im.xMm = mm.x - imgDrag.dx;
-      im.yMm = mm.y - imgDrag.dy;
-    } else {
-      var dxMm = Math.abs(mm.x - imgDrag.anchor.x);
-      var dyMm = Math.abs(mm.y - imgDrag.anchor.y);
-      var newW = Math.max(10, Math.min(600, Math.max(dxMm, dyMm * (im.aspect || 1))));
-      var newH = newW / (im.aspect || 1);
-      im.wMm = newW;
-      im.xMm = imgDrag.left ? imgDrag.anchor.x - newW : imgDrag.anchor.x;
-      im.yMm = imgDrag.top ? imgDrag.anchor.y - newH : imgDrag.anchor.y;
-    }
-    clampImage();
-    syncUI();
-    requestRender();
-  }
-
-  function endImageDrag(ev) {
-    if (!imgDrag) return;
-    imgDrag = null;
-    try { canvas.releasePointerCapture(ev.pointerId); } catch (e) { /* noop */ }
-    requestRender();
-  }
-
-  function updateImageCursor(ev) {
-    var hit = imageHitTest(eventToMm(ev));
-    canvas.style.cursor = !hit ? 'default'
-      : (hit.type === 'corner'
-          ? (hit.corner === 'tl' || hit.corner === 'br' ? 'nwse-resize' : 'nesw-resize')
-          : 'move');
-  }
-
-  /* 画像ファイルを取り込む（長辺2000pxに縮小して保存容量を抑える） */
-  function importImageFile(file) {
-    if (!file) return;
-    var reader = new FileReader();
-    reader.onload = function () {
-      var im = new Image();
-      im.onload = function () {
-        var maxSide = 2000;
-        var sc = Math.min(1, maxSide / Math.max(im.naturalWidth, im.naturalHeight));
-        var cw = Math.max(1, Math.round(im.naturalWidth * sc));
-        var ch = Math.max(1, Math.round(im.naturalHeight * sc));
-        var c = document.createElement('canvas');
-        c.width = cw; c.height = ch;
-        c.getContext('2d').drawImage(im, 0, 0, cw, ch);
-        var isPng = /image\/png/i.test(file.type || '');
-        var dataUrl;
-        try { dataUrl = isPng ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', 0.9); }
-        catch (e) { setStatus('画像を読み込めませんでした', true); return; }
-        var aspect = cw / ch;
-        var size = POPPresets.paperSize(state);
-        var wMm = Math.round(size.w * 0.6);
-        state.image = {
-          src: dataUrl, aspect: aspect, wMm: wMm,
-          xMm: Math.round((size.w - wMm) / 2),
-          yMm: Math.round((size.h - wMm / aspect) / 2),
-          opacity: 1, layer: 'back'
-        };
-        autosaveWarned = false;
-        ensureImage(dataUrl, function () { syncUI(); requestRender(); });
-        setStatus('画像を追加しました', true);
-      };
-      im.onerror = function () { setStatus('画像を読み込めませんでした', true); };
-      im.src = String(reader.result);
-    };
-    reader.onerror = function () { setStatus('ファイルを読めませんでした', true); };
-    reader.readAsDataURL(file);
-  }
-
-  /* ---------- 保存済みデザイン ---------- */
-  function renderPresetList() {
-    var ul = document.getElementById('preset-list');
-    var arr = POPStorage.listPresets();
-    if (!arr.length) {
-      ul.innerHTML = '<li class="presets__empty">保存されたデザインはありません</li>';
-      return;
-    }
-    ul.innerHTML = arr.map(function (p) {
-      var n = String(p.name).replace(/&/g, '&amp;').replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-      return '<li><span title="' + n + '">' + n + '</span>' +
-        '<button type="button" class="btn btn--sm" data-preset-load="' + n + '">読込</button>' +
-        '<button type="button" class="btn btn--sm btn--ghost" data-preset-del="' + n + '">削除</button></li>';
-    }).join('');
-  }
-
   /* ---------- イベント ---------- */
   function bindEvents() {
     /* 入力欄 → 状態 */
@@ -615,12 +454,32 @@
     function onFieldChange(ev) {
       var el = ev.target;
       if (!el || !el.getAttribute) return;
+
+      var docPath = el.getAttribute('data-doc-path');
+      if (docPath) {
+        setPath(doc, docPath, parseValue(el));
+        onDocChange(docPath);
+        return;
+      }
+
       var path = el.getAttribute('data-path');
       if (!path) return;
       setPath(state, path, parseValue(el));
-      if (path.indexOf('image.') === 0) clampImage();   /* 幅・X・Y の直接入力もクランプ */
-      syncUI();
-      requestRender();
+      if (path.indexOf('image.') === 0) POPImageTool.clamp();  /* 幅・X・Y の直接入力もクランプ */
+      refreshAll();
+    }
+
+    /* カード/シート設定が変わったときの後処理。Task 10 で比例スケールが加わる。 */
+    function onDocChange(docPath) {
+      doc.sheet.margin = Math.max(0, Math.min(30, Number(doc.sheet.margin) || 0));
+      doc.sheet.gap = Math.max(0, Math.min(20, Number(doc.sheet.gap) || 0));
+      if (docPath.indexOf('card.') === 0 && doc.card.id === 'custom') {
+        var c = POPPresets.clampCustomCard(doc.card, doc.sheet);
+        doc.card.customW = c.customW;
+        doc.card.customH = c.customH;
+      }
+      POPImageTool.clamp();
+      refreshAll();
     }
 
     /* タブ切り替え（クリック＋キーボード：←→ Home End） */
@@ -677,30 +536,21 @@
     });
     document.getElementById('file-image').addEventListener('change', function (ev) {
       var file = ev.target.files && ev.target.files[0];
-      importImageFile(file);
+      autosaveWarned = false;
+      POPImageTool.importFile(file);
       ev.target.value = '';
     });
     document.getElementById('btn-image-del').addEventListener('click', function () {
-      state.image = POPPresets.defaultState().image;
       autosaveWarned = false;
-      canvas.style.cursor = 'default';
-      syncUI();
-      requestRender();
-      setStatus('画像を削除しました', true);
+      POPImageTool.clear();
     });
-
-    /* 画像：プレビュー上でドラッグ移動／四隅リサイズ（マウス・タッチ共通） */
-    canvas.addEventListener('pointerdown', onImagePointerDown);
-    canvas.addEventListener('pointermove', onImagePointerMove);
-    canvas.addEventListener('pointerup', endImageDrag);
-    canvas.addEventListener('pointercancel', endImageDrag);
 
     /* 書き出し */
     document.getElementById('btn-png').addEventListener('click', exportPng);
     document.getElementById('btn-print').addEventListener('click', printPop);
 
     document.getElementById('btn-save-json').addEventListener('click', function () {
-      POPStorage.exportJson(state, safeFileName() + '.json');
+      POPStorage.exportJson(doc, safeFileName() + '.json');
       setStatus('データを保存しました', true);
     });
 
@@ -712,9 +562,12 @@
       var file = ev.target.files && ev.target.files[0];
       if (!file) return;
       POPStorage.readJsonFile(file).then(function (data) {
-        state = mergeDeep(POPPresets.defaultState(), data);
-        syncUI();
-        requestRender();
+        var loaded = POPDoc.migrate(data);
+        if (!loaded) { setStatus('読み込めるデータではありません', true); return; }
+        doc = loaded;
+        state = POPDoc.activeCard(doc);
+        autosaveWarned = false;
+        refreshAll();
         setStatus('データを読み込みました', true);
       }).catch(function (e) {
         setStatus(e.message, true);
@@ -724,41 +577,12 @@
 
     document.getElementById('btn-reset').addEventListener('click', function () {
       if (!confirm('入力内容をすべて初期状態に戻します。よろしいですか？')) return;
-      state = POPPresets.sampleState();
+      doc = POPDoc.defaultDoc();
+      state = POPDoc.activeCard(doc);
       POPStorage.clearAuto();
-      syncUI();
-      requestRender();
+      autosaveWarned = false;
+      refreshAll();
       setStatus('リセットしました', true);
-    });
-
-    /* 名前を付けて保存 */
-    document.getElementById('btn-preset-save').addEventListener('click', function () {
-      var input = document.getElementById('preset-name');
-      /* 改行・連続空白を1つに正規化（HTML属性値の空白正規化で読込/削除がズレるのを防ぐ） */
-      var fallback = String(state.name.text || '').replace(/\s+/g, ' ').trim().slice(0, 20);
-      var name = input.value.replace(/\s+/g, ' ').trim() || fallback || '無題';
-      POPStorage.savePreset(name, JSON.parse(JSON.stringify(state)));
-      input.value = '';
-      renderPresetList();
-      setStatus('「' + name + '」を保存しました', true);
-    });
-
-    document.getElementById('preset-list').addEventListener('click', function (ev) {
-      var loadBtn = ev.target.closest('[data-preset-load]');
-      var delBtn = ev.target.closest('[data-preset-del]');
-      if (loadBtn) {
-        var name = loadBtn.getAttribute('data-preset-load');
-        var found = POPStorage.listPresets().filter(function (p) { return p.name === name; })[0];
-        if (found) {
-          state = mergeDeep(POPPresets.defaultState(), found.state);
-          syncUI();
-          requestRender();
-          setStatus('「' + name + '」を読み込みました', true);
-        }
-      } else if (delBtn) {
-        POPStorage.deletePreset(delBtn.getAttribute('data-preset-del'));
-        renderPresetList();
-      }
     });
 
     /* リサイズで再描画 */
@@ -780,11 +604,27 @@
     buildPaperOptions();
     buildTemplates();
 
-    var saved = POPStorage.loadAuto();
-    if (saved) state = mergeDeep(POPPresets.defaultState(), saved);
+    /* ①新形式 → ②旧形式（単品）を移行 → ③サンプル の順に復元する */
+    var restored = POPDoc.migrate(POPStorage.loadAuto());
+    if (!restored) restored = POPDoc.migrate(POPStorage.loadLegacyAuto());
+    doc = restored || POPDoc.sampleDoc();
+    state = POPDoc.activeCard(doc);
+
+    POPImageTool.init({
+      canvas: canvas,
+      ctx: ctx,
+      getCard: function () { return state; },
+      getCardSize: cardSizeMm,
+      onChange: function () { refreshAll(); },
+      setStatus: setStatus
+    });
+    POPPresetUI.init({
+      getCard: function () { return state; },
+      applyCard: applyCardState,
+      setStatus: setStatus
+    });
 
     bindEvents();
-    renderPresetList();
     syncUI();
     requestRender();
 
