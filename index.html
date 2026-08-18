@@ -171,17 +171,17 @@
       <summary class="sect__head">3. カードの大きさ</summary>
       <div class="sect__body">
         <label class="field">
-          <span>プリセット</span>
-          <select id="card-select" data-doc-path="card.id"></select>
+          <span class="field__label">プリセット</span>
+          <select id="card-select" class="control" data-doc-path="card.id"></select>
         </label>
         <div class="field-row" id="card-custom-size" hidden>
           <label class="field">
-            <span>幅(mm)</span>
-            <input type="number" min="10" max="1000" step="0.5" data-doc-path="card.customW">
+            <span class="field__label">幅(mm)</span>
+            <input type="number" min="10" max="1000" step="0.5" class="control" data-doc-path="card.customW">
           </label>
           <label class="field">
-            <span>高さ(mm)</span>
-            <input type="number" min="10" max="1000" step="0.5" data-doc-path="card.customH">
+            <span class="field__label">高さ(mm)</span>
+            <input type="number" min="10" max="1000" step="0.5" class="control" data-doc-path="card.customH">
           </label>
         </div>
         <label class="field field--inline">
@@ -197,34 +197,34 @@
       <summary class="sect__head">4. 印刷シート</summary>
       <div class="sect__body">
         <label class="field">
-          <span>用紙</span>
-          <select id="paper-select" data-doc-path="sheet.id"></select>
+          <span class="field__label">用紙</span>
+          <select id="paper-select" class="control" data-doc-path="sheet.id"></select>
         </label>
         <label class="field">
-          <span>向き</span>
-          <select data-doc-path="sheet.orientation">
+          <span class="field__label">向き</span>
+          <select class="control" data-doc-path="sheet.orientation">
             <option value="portrait">縦</option>
             <option value="landscape">横</option>
           </select>
         </label>
         <div class="field-row" id="custom-size" hidden>
           <label class="field">
-            <span>幅(mm)</span>
-            <input type="number" min="20" max="1000" data-doc-path="sheet.customW">
+            <span class="field__label">幅(mm)</span>
+            <input type="number" min="20" max="1000" class="control" data-doc-path="sheet.customW">
           </label>
           <label class="field">
-            <span>高さ(mm)</span>
-            <input type="number" min="20" max="1000" data-doc-path="sheet.customH">
+            <span class="field__label">高さ(mm)</span>
+            <input type="number" min="20" max="1000" class="control" data-doc-path="sheet.customH">
           </label>
         </div>
         <div class="field-row">
           <label class="field">
-            <span>安全余白(mm)</span>
-            <input type="number" min="0" max="30" step="0.5" data-doc-path="sheet.margin">
+            <span class="field__label">安全余白(mm)</span>
+            <input type="number" min="0" max="30" step="0.5" class="control" data-doc-path="sheet.margin">
           </label>
           <label class="field">
-            <span>カード間隔(mm)</span>
-            <input type="number" min="0" max="20" step="0.5" data-doc-path="sheet.gap">
+            <span class="field__label">カード間隔(mm)</span>
+            <input type="number" min="0" max="20" step="0.5" class="control" data-doc-path="sheet.gap">
           </label>
         </div>
         <label class="field field--inline">
