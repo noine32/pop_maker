@@ -20,6 +20,9 @@ eval(read('assets/js/imposition.js'));      // defines POPImposition
 /* --- POPPresets（純粋・DOM非依存）をそのまま読み込む --- */
 eval(read('assets/js/presets.js'));         // defines POPPresets
 
+/* --- POPDoc（純粋・DOM非依存）をそのまま読み込む --- */
+eval(read('assets/js/doc.js'));             // defines POPDoc
+
 /* --- app.js から mergeDeep を抽出して読み込む --- */
 var appSrc = read('assets/js/app.js');
 var mdMatch = appSrc.match(/function mergeDeep\(base, patch\) \{[\s\S]*?\n  \}/);
@@ -318,6 +321,166 @@ test('imageMaxSide: カード長辺×12px、800〜2000で頭打ち', function ()
   assert.strictEqual(POPPresets.imageMaxSide({ w: 44, h: 67 }), 804);
   assert.strictEqual(POPPresets.imageMaxSide({ w: 20, h: 20 }), 800);
   assert.strictEqual(POPPresets.imageMaxSide({ w: 210, h: 297 }), 2000);
+});
+
+/* ---------- POPDoc（ドキュメント操作・移行） ---------- */
+test('defaultDoc: カード1枚・44×67mm・A4シート', function () {
+  var d = POPDoc.defaultDoc();
+  assert.strictEqual(d.version, 2);
+  assert.strictEqual(d.cards.length, 1);
+  assert.strictEqual(d.activeIndex, 0);
+  assert.deepStrictEqual(POPPresets.cardSize(d.card), { w: 44, h: 67 });
+  assert.strictEqual(d.sheet.id, 'a4');
+  assert.strictEqual(d.sheet.margin, 5);
+});
+test('migrate: v1（A4の単品）→ カード1枚・シートもA4・余白0', function () {
+  var v1 = POPPresets.sampleState();
+  v1.paper = { id: 'a4', orientation: 'portrait', customW: 150, customH: 100 };
+  var d = POPDoc.migrate(v1);
+  assert.strictEqual(d.version, 2);
+  assert.strictEqual(d.cards.length, 1);
+  assert.deepStrictEqual(POPPresets.cardSize(d.card), { w: 210, h: 297 });
+  assert.deepStrictEqual(POPPresets.sheetSize(d.sheet), { w: 210, h: 297 });
+  assert.strictEqual(d.sheet.margin, 0);
+  assert.strictEqual(d.sheet.cutLine, false);
+  assert.strictEqual(d.cards[0].paper, undefined);
+  assert.strictEqual(d.cards[0].name.text, v1.name.text);
+});
+test('migrate: v1（A5横）でもカードとシートが同寸になる', function () {
+  var v1 = POPPresets.sampleState();
+  v1.paper = { id: 'a5', orientation: 'landscape', customW: 150, customH: 100 };
+  var d = POPDoc.migrate(v1);
+  assert.deepStrictEqual(POPPresets.cardSize(d.card), { w: 210, h: 148 });
+  assert.deepStrictEqual(POPPresets.sheetSize(d.sheet), { w: 210, h: 148 });
+  /* 1ページに1枚＝従来と同じ印刷結果 */
+  var L = POPImposition.computeLayout({
+    sheetW: 210, sheetH: 148, cardW: 210, cardH: 148,
+    margin: 0, gap: 0, allowRotate: true, center: true
+  });
+  assert.strictEqual(L.perPage, 1);
+});
+test('migrate: v2 はそのまま（冪等）', function () {
+  var d1 = POPDoc.defaultDoc();
+  d1.cards[0].name.text = 'テスト';
+  var d2 = POPDoc.migrate(JSON.parse(JSON.stringify(d1)));
+  assert.strictEqual(d2.cards.length, 1);
+  assert.strictEqual(d2.cards[0].name.text, 'テスト');
+  assert.strictEqual(POPDoc.migrate(d2).cards[0].name.text, 'テスト');
+});
+test('migrate: 壊れたデータは null', function () {
+  assert.strictEqual(POPDoc.migrate(null), null);
+  assert.strictEqual(POPDoc.migrate('abc'), null);
+  assert.strictEqual(POPDoc.migrate(123), null);
+});
+test('normalize: activeIndex を範囲内へ丸める', function () {
+  var d = POPDoc.defaultDoc();
+  d.cards.push(POPPresets.defaultCardState());
+  d.activeIndex = 99;
+  POPDoc.normalize(d);
+  assert.strictEqual(d.activeIndex, 1);
+  d.activeIndex = -5;
+  POPDoc.normalize(d);
+  assert.strictEqual(d.activeIndex, 0);
+  d.activeIndex = 'x';
+  POPDoc.normalize(d);
+  assert.strictEqual(d.activeIndex, 0);
+});
+test('normalize: cards が空・非配列なら1枚補う', function () {
+  var d = POPDoc.defaultDoc();
+  d.cards = [];
+  POPDoc.normalize(d);
+  assert.strictEqual(d.cards.length, 1);
+  d.cards = null;
+  POPDoc.normalize(d);
+  assert.strictEqual(d.cards.length, 1);
+});
+test('normalize: 上限100枚で切り詰める', function () {
+  var d = POPDoc.defaultDoc();
+  for (var i = 0; i < 150; i++) d.cards.push(POPPresets.defaultCardState());
+  POPDoc.normalize(d);
+  assert.strictEqual(d.cards.length, 100);
+});
+test('normalize: margin/gap をクランプする', function () {
+  var d = POPDoc.defaultDoc();
+  d.sheet.margin = 99; d.sheet.gap = -3;
+  POPDoc.normalize(d);
+  assert.strictEqual(d.sheet.margin, 30);
+  assert.strictEqual(d.sheet.gap, 0);
+});
+test('normalize: カードの欠損キーを既定で補う', function () {
+  var d = POPDoc.defaultDoc();
+  d.cards = [{ name: { text: 'のみ' } }];
+  POPDoc.normalize(d);
+  assert.strictEqual(d.cards[0].name.text, 'のみ');
+  assert.strictEqual(d.cards[0].price.prefix, '¥');
+  assert.strictEqual(d.cards[0].layout.padding, 14);
+});
+test('addCard: 追加した位置を返し、選択が移る', function () {
+  var d = POPDoc.defaultDoc();
+  var i = POPDoc.addCard(d, POPPresets.defaultCardState());
+  assert.strictEqual(i, 1);
+  assert.strictEqual(d.cards.length, 2);
+  assert.strictEqual(d.activeIndex, 1);
+});
+test('addCard: 100枚を超えたら -1 を返し増えない', function () {
+  var d = POPDoc.defaultDoc();
+  while (d.cards.length < 100) d.cards.push(POPPresets.defaultCardState());
+  assert.strictEqual(POPDoc.addCard(d, POPPresets.defaultCardState()), -1);
+  assert.strictEqual(d.cards.length, 100);
+});
+test('duplicateCard: 直後に複製が入り、元と独立している', function () {
+  var d = POPDoc.defaultDoc();
+  d.cards[0].name.text = '元';
+  var i = POPDoc.duplicateCard(d, 0);
+  assert.strictEqual(i, 1);
+  assert.strictEqual(d.cards[1].name.text, '元');
+  d.cards[1].name.text = '複製';
+  assert.strictEqual(d.cards[0].name.text, '元');
+});
+test('removeCard: 最後の1枚は消せない', function () {
+  var d = POPDoc.defaultDoc();
+  assert.strictEqual(POPDoc.removeCard(d, 0), false);
+  assert.strictEqual(d.cards.length, 1);
+});
+test('removeCard: 削除後は同じ位置（末尾なら新しい末尾）を選ぶ', function () {
+  var d = POPDoc.defaultDoc();
+  POPDoc.addCard(d, POPPresets.defaultCardState());
+  POPDoc.addCard(d, POPPresets.defaultCardState());
+  d.activeIndex = 1;
+  assert.strictEqual(POPDoc.removeCard(d, 1), true);
+  assert.strictEqual(d.cards.length, 2);
+  assert.strictEqual(d.activeIndex, 1);
+  assert.strictEqual(POPDoc.removeCard(d, 1), true);
+  assert.strictEqual(d.activeIndex, 0);
+});
+test('moveCard: 並べ替えても選択中のカードが追従する', function () {
+  var d = POPDoc.defaultDoc();
+  d.cards[0].name.text = 'A';
+  POPDoc.addCard(d, POPPresets.defaultCardState());
+  d.cards[1].name.text = 'B';
+  POPDoc.addCard(d, POPPresets.defaultCardState());
+  d.cards[2].name.text = 'C';
+  d.activeIndex = 0;
+  assert.strictEqual(POPDoc.moveCard(d, 0, 2), true);
+  assert.deepStrictEqual(d.cards.map(function (c) { return c.name.text; }), ['B', 'C', 'A']);
+  assert.strictEqual(d.activeIndex, 2);
+});
+test('applyDesignToAll: 見た目だけ配り、文章と画像は触らない', function () {
+  var d = POPDoc.defaultDoc();
+  POPDoc.addCard(d, POPPresets.defaultCardState());
+  d.cards[0].design.bg = '#ff0000';
+  d.cards[0].name.size = 20;
+  d.cards[0].name.text = 'もと';
+  d.cards[1].name.text = 'さき';
+  d.cards[1].price.value = '980';
+  d.cards[1].image = { src: 'data:x', xMm: 1, yMm: 2, wMm: 3, aspect: 1, opacity: 1, layer: 'back' };
+  var n = POPDoc.applyDesignToAll(d, 0);
+  assert.strictEqual(n, 1);
+  assert.strictEqual(d.cards[1].design.bg, '#ff0000');
+  assert.strictEqual(d.cards[1].name.size, 20);
+  assert.strictEqual(d.cards[1].name.text, 'さき');
+  assert.strictEqual(d.cards[1].price.value, '980');
+  assert.strictEqual(d.cards[1].image.src, 'data:x');
 });
 
 /* ---------- POPText.wrap ---------- */
