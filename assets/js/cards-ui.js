@@ -142,10 +142,38 @@ var POPCardsUI = (function () {
 
   function refreshNow() { build(); updateOps(); }
 
+  /* 選択中カードの行だけを更新する軽い版。文字を打つたびに全カードを
+     描き直すと重いので、内容が変わったカード1枚だけを描き替える。 */
+  function refreshActive() {
+    var doc = opts.getDoc();
+    var row = listEl.querySelector('.cardrow[data-index="' + doc.activeIndex + '"]');
+    if (!row) { refreshNow(); return; }
+
+    var card = doc.cards[doc.activeIndex];
+    var l = rowLabel(card);
+    var nameEl = row.querySelector('.cardrow__name');
+    var priceEl = row.querySelector('.cardrow__price');
+    if (nameEl) { nameEl.textContent = l.name; row.setAttribute('title', l.name); }
+    if (priceEl) priceEl.textContent = l.price;
+
+    var cv = row.querySelector('.cardrow__thumb');
+    if (!cv) return;
+    var size = POPPresets.cardSize(doc.card);
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var pxPerMm = (THUMB_W * dpr) / size.w;
+    cv.width = Math.max(1, Math.round(THUMB_W * dpr));
+    cv.height = Math.max(1, Math.round(size.h * pxPerMm));
+    cv.style.height = Math.round(size.h * (THUMB_W / size.w)) + 'px';
+    var assets = opts.getAssets ? (opts.getAssets()[doc.activeIndex] || { image: null }) : { image: null };
+    try {
+      POPRenderer.draw(cv.getContext('2d'), card, pxPerMm, assets, size);
+    } catch (e) { /* サムネイルの失敗で画面を止めない */ }
+  }
+
   /* 文字入力のたびに全カードを描き直すと重いので間引く */
   function refresh() {
     if (timer) return;
-    timer = setTimeout(function () { timer = null; refreshNow(); }, REBUILD_DEBOUNCE_MS);
+    timer = setTimeout(function () { timer = null; refreshActive(); }, REBUILD_DEBOUNCE_MS);
   }
 
   function init(o) {
@@ -155,5 +183,5 @@ var POPCardsUI = (function () {
     refreshNow();
   }
 
-  return { init: init, refresh: refresh, refreshNow: refreshNow };
+  return { init: init, refresh: refresh, refreshNow: refreshNow, refreshActive: refreshActive };
 })();

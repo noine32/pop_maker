@@ -323,13 +323,7 @@
     ensureImagesThenRerender();
     ensureFontsThenRerender();
 
-    var saved = POPStorage.saveAuto(doc);
-    if (!saved && !autosaveWarned) {
-      autosaveWarned = true;
-      var imgCount = doc.cards.filter(function (c) { return c.image && c.image.src; }).length;
-      setStatus('カード' + doc.cards.length + '枚・画像' + imgCount +
-                '点のため自動保存できません。「データ保存」で書き出せます', true);
-    }
+    scheduleSave();
   }
 
   /* 画像が未ロードなら読み込んでから描き直す。
@@ -395,7 +389,7 @@
       setStatus('内容がカードに収まりきりません。文字サイズを下げてください');
     } else if (previewMode === 'card' && result.fontScale < 0.999) {
       setStatus('自動縮小中（' + Math.round(result.fontScale * 100) + '%）');
-    } else {
+    } else if (!statusSticky) {
       setStatus('');
     }
 
@@ -425,11 +419,38 @@
     POPFonts.ensureAll(pending).then(function () { refreshAll(); });
   }
 
+  /* 自動保存の予約。カードが増えると doc の JSON 化が重くなるため、
+     毎フレーム保存せず 500ms にまとめる。 */
+  var saveTimer = null;
+
+  function scheduleSave() {
+    if (saveTimer) return;
+    saveTimer = setTimeout(function () {
+      saveTimer = null;
+      var saved = POPStorage.saveAuto(doc);
+      if (!saved && !autosaveWarned) {
+        autosaveWarned = true;
+        var imgCount = doc.cards.filter(function (c) { return c.image && c.image.src; }).length;
+        setStatus('カード' + doc.cards.length + '枚・画像' + imgCount +
+                  '点のため自動保存できません。「データ保存」で書き出せます', true);
+      }
+    }, 500);
+  }
+
   var statusTimer = null;
+  var statusSticky = false;   /* 一時メッセージの表示中。描画のたびに消さないための印 */
+
   function setStatus(msg, temporary) {
     statusEl.textContent = msg;
     if (statusTimer) { clearTimeout(statusTimer); statusTimer = null; }
-    if (msg && temporary) statusTimer = setTimeout(function () { statusEl.textContent = ''; }, 2500);
+    statusSticky = !!(msg && temporary);
+    if (statusSticky) {
+      statusTimer = setTimeout(function () {
+        statusTimer = null;
+        statusSticky = false;
+        statusEl.textContent = '';
+      }, 2500);
+    }
   }
 
   /* ---------- テンプレート適用 ----------

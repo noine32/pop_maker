@@ -8,6 +8,18 @@ var POPExport = (function () {
 
   var cfg = null;   /* { getDoc, getCard, getCardSize, getPageIndex, setStatus } */
 
+  /* 出力中フラグ。連打で iframe と blob 生成の流れが並行するのを防ぐ。
+     何らかの経路で解除されなかったときに永久に押せなくならないよう、
+     60秒で自動的に解除する保険を付ける。 */
+  var busy = false;
+  var busyTimer = null;
+
+  function setBusy(v) {
+    busy = v;
+    if (busyTimer) { clearTimeout(busyTimer); busyTimer = null; }
+    if (v) busyTimer = setTimeout(function () { busy = false; busyTimer = null; }, 60000);
+  }
+
   var PRINT_DPI = 300;
   var MULTI_DOWNLOAD_INTERVAL_MS = 800;
   var PAGES_CONFIRM_THRESHOLD = 10;
@@ -32,10 +44,11 @@ var POPExport = (function () {
   function saveCanvas(cv, filename, done) {
     var finish = function (blob) {
       POPStorage.download(blob, filename);
-      if (done) done(); else cfg.setStatus('PNGを保存しました', true);
+      if (done) done(); else { cfg.setStatus('PNGを保存しました', true); setBusy(false); }
     };
     var fail = function () {
       cfg.setStatus('画像を作成できませんでした。解像度を下げるか用紙を小さくしてお試しください', true);
+      setBusy(false);
     };
     var viaDataUrl = function () {
       try {
@@ -57,6 +70,8 @@ var POPExport = (function () {
 
   /* ---------- PNG 保存 ---------- */
   function png() {
+    if (busy) return;
+    setBusy(true);
     var doc = cfg.getDoc();
     var dpi = Number(document.getElementById('export-dpi').value) || PRINT_DPI;
     var target = document.getElementById('export-target').value;
@@ -75,7 +90,7 @@ var POPExport = (function () {
     }
 
     var pages = POPSheetView.pagesOf(doc);
-    if (pages <= 0) { cfg.setStatus('カードがシートより大きいため書き出せません', true); return; }
+    if (pages <= 0) { cfg.setStatus('カードがシートより大きいため書き出せません', true); setBusy(false); return; }
 
     cfg.setStatus('画像を作成中…');
     POPFonts.ensureAll(allUsedFonts()).then(function () {
@@ -90,7 +105,7 @@ var POPExport = (function () {
         }
         /* 連続ダウンロードはブラウザに抑止されやすいので間隔を空けて1枚ずつ出す */
         var step = function (k) {
-          if (k >= targets.length) { cfg.setStatus('PNGを保存しました', true); return; }
+          if (k >= targets.length) { cfg.setStatus('PNGを保存しました', true); setBusy(false); return; }
           var p = targets[k];
           saveCanvas(POPSheetView.renderSheetToCanvas(doc, p, dpi, assetsList),
                      safeFileName() + '_sheet' + (p + 1) + '_' + dpi + 'dpi.png',
@@ -108,11 +123,14 @@ var POPExport = (function () {
      data URL は base64 で約1.33倍に膨らみ多ページで不利なので blob URL を使い、
      ページ canvas は1枚ずつ作って参照を捨てる。 */
   function printSheets() {
+    if (busy) return;
+    setBusy(true);
     var doc = cfg.getDoc();
     var pages = POPSheetView.pagesOf(doc);
-    if (pages <= 0) { cfg.setStatus('カードがシートより大きいため印刷できません', true); return; }
+    if (pages <= 0) { cfg.setStatus('カードがシートより大きいため印刷できません', true); setBusy(false); return; }
     if (pages > PAGES_CONFIRM_THRESHOLD &&
         !window.confirm(pages + 'ページを印刷します。時間とメモリを消費しますが続けますか？')) {
+      setBusy(false);
       return;
     }
 
@@ -180,6 +198,7 @@ var POPExport = (function () {
       } catch (e) {
         cfg.setStatus('印刷を開始できませんでした', true);
       }
+      setBusy(false);
       setTimeout(cleanup, 2000);
     };
 
