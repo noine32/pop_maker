@@ -23,11 +23,21 @@
     refreshAll(true);
   }
 
-  /** 読み込んだ1カードぶんのデザインを選択中カードへ適用する（プリセット読込用） */
+  /* 読み込んだ1カード分のデザインを選択中カードへ適用する（プリセット読込用）。
+     改修前に保存されたプリセットは用紙(paper)を持ち、その用紙前提の pt で
+     保存されている。そのまま 44×67mm のカードへ乗せると文字が巨大になり
+     自動縮小で潰れるため、保存当時の寸法から現在のカードサイズへ比例させる。
+     paper を持たない＝改修後に保存されたものは、既にカード基準なので触らない。 */
   function applyCardState(cardState) {
     var base = POPPresets.defaultCardState();
     POPDoc.mergeDeep(base, cardState);
-    delete base.paper;                 /* 旧プリセットは paper を持つ場合がある */
+    var legacyPaper = cardState && cardState.paper;
+    delete base.paper;
+    if (legacyPaper) {
+      var from = POPPresets.paperSize({ paper: legacyPaper });
+      var size = cardSizeMm();
+      POPPresets.scaleCard(base, POPPresets.scaleFor(from.w, from.h, size.w, size.h), size);
+    }
     doc.cards[doc.activeIndex] = base;
     state = POPDoc.activeCard(doc);
     POPImageTool.clamp();
