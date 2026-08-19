@@ -76,7 +76,7 @@ var POPPresets = (function () {
         layout: { align: 'center', valign: 'center', divider: false, padding: 12, gap: 9 },
         catch: { font: 'rocknroll', weight: 400, color: '#ff5a00', size: 24 },
         name:  { font: 'rocknroll', weight: 400, color: '#ffffff', size: 60 },
-        price: { font: 'rounded', weight: 800, color: '#ff5a00', size: 120 },
+        price: { font: 'rounded', weight: 900, color: '#ff5a00', size: 120 },
         desc:  { font: 'rounded', weight: 400, color: '#5a4a2a', size: 18 },
         note:  { font: 'rounded', weight: 400, color: '#8a7a5a', size: 12 },
         badge: { bg: '#ff5a00', color: '#ffffff', style: 'circle' }
@@ -102,12 +102,57 @@ var POPPresets = (function () {
         design: { bg: '#fffdf7', accent: '#2b6cb0', band: 'none',
                   border: { style: 'dashed', width: 2, color: '#2b6cb0' } },
         layout: { align: 'center', valign: 'center', divider: false, padding: 14, gap: 9 },
-        catch: { font: 'yusei', weight: 400, color: '#e0533d', size: 24 },
-        name:  { font: 'yusei', weight: 400, color: '#243b53', size: 58 },
-        price: { font: 'yusei', weight: 400, color: '#2b6cb0', size: 118 },
-        desc:  { font: 'yusei', weight: 400, color: '#334e68', size: 18 },
-        note:  { font: 'yusei', weight: 400, color: '#829ab1', size: 12 },
+        catch: { font: 'kurenaido', weight: 400, color: '#e0533d', size: 24 },
+        name:  { font: 'kurenaido', weight: 400, color: '#243b53', size: 58 },
+        /* 価格だけ Yusei Magic のまま。Zen Kurenaido は数字が細く遠目で読めないため */
+        price: { font: 'yusei',     weight: 400, color: '#2b6cb0', size: 118 },
+        desc:  { font: 'kurenaido', weight: 400, color: '#334e68', size: 18 },
+        note:  { font: 'kurenaido', weight: 400, color: '#829ab1', size: 12 },
         badge: { bg: '#e0533d', color: '#ffffff', style: 'chip' }
+      }
+    },
+    {
+      id: 'cute', name: 'かわいい', swatchBg: '#fff0f5', swatchFg: '#e05a8a',
+      apply: {
+        design: { bg: '#fff0f5', accent: '#e05a8a', band: 'none',
+                  border: { style: 'round', width: 3, color: '#f2a0c0' } },
+        layout: { align: 'center', valign: 'center', divider: false, padding: 13, gap: 9 },
+        catch: { font: 'hachimaru', weight: 400, color: '#e05a8a', size: 22 },
+        name:  { font: 'hachimaru', weight: 400, color: '#5b3145', size: 54 },
+        /* 価格だけ太い書体にする。丸文字は数字が細く、遠目で読めないため */
+        price: { font: 'mochiy',    weight: 400, color: '#e05a8a', size: 116 },
+        desc:  { font: 'hachimaru', weight: 400, color: '#6b4a58', size: 17 },
+        note:  { font: 'hachimaru', weight: 400, color: '#a98a97', size: 12 },
+        badge: { bg: '#e05a8a', color: '#ffffff', style: 'circle' }
+      }
+    },
+    {
+      id: 'japanese', name: '和風', swatchBg: '#f7f3e8', swatchFg: '#7b2d26',
+      apply: {
+        design: { bg: '#f7f3e8', accent: '#7b2d26', band: 'none',
+                  border: { style: 'solid', width: 1.6, color: '#7b2d26' } },
+        layout: { align: 'center', valign: 'center', divider: true, padding: 16, gap: 9 },
+        catch: { font: 'yujisyuku', weight: 400, color: '#7b2d26', size: 22 },
+        name:  { font: 'yujisyuku', weight: 400, color: '#2f2a24', size: 56 },
+        /* 筆書きの数字は細すぎて価格に向かないので、硬筆の太字にする */
+        price: { font: 'klee',      weight: 700, color: '#7b2d26', size: 112 },
+        desc:  { font: 'yujisyuku', weight: 400, color: '#4a4239', size: 18 },
+        note:  { font: 'yujisyuku', weight: 400, color: '#8a7f6e', size: 12 },
+        badge: { bg: '#7b2d26', color: '#f7f3e8', style: 'chip' }
+      }
+    },
+    {
+      id: 'retro', name: 'レトロ', swatchBg: '#f3efe3', swatchFg: '#4a6741',
+      apply: {
+        design: { bg: '#f3efe3', accent: '#4a6741', band: 'none',
+                  border: { style: 'double', width: 1.4, color: '#4a6741' } },
+        layout: { align: 'center', valign: 'center', divider: true, padding: 16, gap: 8 },
+        catch: { font: 'tegomin',  weight: 400, color: '#8a5a2b', size: 21 },
+        name:  { font: 'tegomin',  weight: 400, color: '#33301f', size: 54 },
+        price: { font: 'kiwimaru', weight: 700, color: '#4a6741', size: 110 },
+        desc:  { font: 'kiwimaru', weight: 400, color: '#4f4a3a', size: 17 },
+        note:  { font: 'kiwimaru', weight: 400, color: '#8a8470', size: 12 },
+        badge: { bg: '#4a6741', color: '#f3efe3', style: 'chip' }
       }
     },
     {

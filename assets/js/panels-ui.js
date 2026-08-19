@@ -14,9 +14,20 @@ var POPPanelsUI = (function () {
     { key: 'note',  label: '注記・店名',    min: 6,  max: 80,  lh: true }
   ];
 
+  /* フォントが23種あるため系統ごとに optgroup でまとめる。
+     並び順は POPFonts.LIST の出現順（用紙選択の buildPaperOptions と同じ方式）。 */
   function fontOptions() {
-    return POPFonts.LIST.map(function (f) {
-      return '<option value="' + f.id + '">' + f.label + '</option>';
+    var groups = {}, order = [];
+    POPFonts.LIST.forEach(function (f) {
+      var g = f.group || 'その他';
+      if (!groups[g]) { groups[g] = []; order.push(g); }
+      groups[g].push(f);
+    });
+    return order.map(function (g) {
+      var opts = groups[g].map(function (f) {
+        return '<option value="' + f.id + '">' + f.label + '</option>';
+      }).join('');
+      return '<optgroup label="' + g + '">' + opts + '</optgroup>';
     }).join('');
   }
 

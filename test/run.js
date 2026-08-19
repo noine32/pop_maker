@@ -14,6 +14,9 @@ function read(f) { return fs.readFileSync(path.join(ROOT, f), 'utf8'); }
 /* --- POPText（純粋・DOM非依存）をそのまま読み込む --- */
 eval(read('assets/js/text.js'));            // defines POPText
 
+/* --- POPFonts（LIST と cssUrl は DOM 非依存） --- */
+eval(read('assets/js/fonts.js'));           // defines POPFonts
+
 /* --- POPImposition（純粋・DOM非依存）をそのまま読み込む --- */
 eval(read('assets/js/imposition.js'));      // defines POPImposition
 
@@ -754,6 +757,145 @@ test('wrap: サロゲートペア（絵文字）を壊さない', function () {
 test('wrap: 改行を段落として保持', function () {
   var ctx = mockCtx();
   assert.deepStrictEqual(POPText.wrap(ctx, 'あ\nい', 100), ['あ', 'い']);
+});
+
+/* ---------- フォント定義 ---------- */
+var FONT_GROUPS = ['標準（このPCのフォント）', 'ゴシック体', '明朝体', '丸ゴシック',
+                   '手書き', '筆・和レトロ', 'かわいい・ポップ'];
+
+test('fonts: id が一意', function () {
+  var seen = {};
+  POPFonts.LIST.forEach(function (f) {
+    assert.ok(!seen[f.id], 'id が重複: ' + f.id);
+    seen[f.id] = true;
+  });
+  assert.strictEqual(POPFonts.LIST.length, 23);
+});
+
+test('fonts: 全エントリに既知の group がある', function () {
+  POPFonts.LIST.forEach(function (f) {
+    assert.ok(FONT_GROUPS.indexOf(f.group) >= 0, '未知の group: ' + f.id + ' / ' + f.group);
+  });
+});
+
+test('fonts: LIST 内で同じ group が連続している', function () {
+  /* 連続していないと optgroup が同名で分断されるため */
+  var seenGroups = [];
+  var prev = null;
+  POPFonts.LIST.forEach(function (f) {
+    if (f.group !== prev) {
+      assert.ok(seenGroups.indexOf(f.group) < 0, 'group が分断: ' + f.group);
+      seenGroups.push(f.group);
+      prev = f.group;
+    }
+  });
+});
+
+test('fonts: web フォントの stack に自身の family 名が含まれる', function () {
+  POPFonts.LIST.forEach(function (f) {
+    if (!f.web) return;
+    assert.ok(f.stack.indexOf('"' + f.web + '"') === 0,
+      'stack の先頭が自身の family でない: ' + f.id);
+  });
+});
+
+test('fonts: 既存 web フォントの weights が旧 <link> と一致する', function () {
+  /* 静的 <link> を消したあとも太字・極太が実体のあるウェイトで出ることを守る */
+  var expected = {
+    notosans:  [400, 700, 900],
+    notoserif: [400, 700, 900],
+    /* 800 は太さの選択欄に無い値だった。極太=900 に揃えたので 900 を要求する */
+    rounded:   [400, 700, 900],
+    kaisei:    [400, 700]
+  };
+  Object.keys(expected).forEach(function (id) {
+    assert.deepStrictEqual(POPFonts.byId[id].weights, expected[id], 'weights 不一致: ' + id);
+  });
+  /* 単一ウェイトのものは weights を持たない */
+  ['kosugimaru', 'dela', 'rocknroll', 'yusei', 'stick'].forEach(function (id) {
+    assert.strictEqual(POPFonts.byId[id].weights, undefined, 'weights 不要: ' + id);
+  });
+});
+
+test('fonts: 追加した手書き系11種が存在する', function () {
+  ['kurenaido', 'klee', 'yomogi', 'yujisyuku', 'yujiboku', 'yujimai',
+   'tegomin', 'kiwimaru', 'hachimaru', 'mochiy', 'potta'].forEach(function (id) {
+    var f = POPFonts.byId[id];
+    assert.ok(f, '未定義: ' + id);
+    assert.ok(f.web, 'web フォントとして定義されていない: ' + id);
+  });
+});
+
+test('cssUrl: 単一ウェイトは wght を付けない', function () {
+  assert.strictEqual(
+    POPFonts.cssUrl(POPFonts.byId.kurenaido),
+    'https://fonts.googleapis.com/css2?family=Zen+Kurenaido&display=swap');
+});
+
+test('cssUrl: 複数ウェイトは wght@ で列挙する', function () {
+  assert.strictEqual(
+    POPFonts.cssUrl(POPFonts.byId.notosans),
+    'https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap');
+});
+
+test('cssUrl: 空白は + に置換される（複数語の family）', function () {
+  assert.strictEqual(
+    POPFonts.cssUrl(POPFonts.byId.hachimaru),
+    'https://fonts.googleapis.com/css2?family=Hachi+Maru+Pop&display=swap');
+});
+
+test('cssUrl: 全 web フォントで https の css2 URL になる', function () {
+  POPFonts.LIST.forEach(function (f) {
+    if (!f.web) return;
+    var u = POPFonts.cssUrl(f);
+    assert.ok(u.indexOf('https://fonts.googleapis.com/css2?family=') === 0, 'URL 不正: ' + f.id);
+    assert.ok(u.indexOf(' ') < 0, 'URL に空白: ' + f.id);
+    assert.ok(u.indexOf('&display=swap') > 0, 'display=swap が無い: ' + f.id);
+  });
+});
+
+/* ---------- テンプレート ---------- */
+var TEXT_KEYS = ['catch', 'name', 'price', 'desc', 'note'];
+
+test('templates: 9種あり id が一意', function () {
+  assert.strictEqual(POPPresets.TEMPLATES.length, 9);
+  var seen = {};
+  POPPresets.TEMPLATES.forEach(function (t) {
+    assert.ok(!seen[t.id], 'id が重複: ' + t.id);
+    seen[t.id] = true;
+  });
+});
+
+test('templates: 参照する font id が全て実在する', function () {
+  POPPresets.TEMPLATES.forEach(function (t) {
+    TEXT_KEYS.forEach(function (k) {
+      var id = t.apply[k].font;
+      assert.ok(POPFonts.byId[id], t.id + '.' + k + ' が未定義フォントを参照: ' + id);
+    });
+  });
+});
+
+test('templates: weight は 400/700/900 のみ', function () {
+  /* 太さの選択欄の option が この3つしか無く、他を入れると
+     次の操作で黙って 400 に戻るため */
+  POPPresets.TEMPLATES.forEach(function (t) {
+    TEXT_KEYS.forEach(function (k) {
+      var w = t.apply[k].weight;
+      assert.ok([400, 700, 900].indexOf(w) >= 0,
+        t.id + '.' + k + ' の weight が不正: ' + w);
+    });
+  });
+});
+
+test('templates: 追加3種と改良した手書き風が期待どおり', function () {
+  var byId = {};
+  POPPresets.TEMPLATES.forEach(function (t) { byId[t.id] = t; });
+  ['cute', 'japanese', 'retro'].forEach(function (id) {
+    assert.ok(byId[id], '未定義のテンプレート: ' + id);
+  });
+  /* 手書き風の商品名は Zen Kurenaido、価格は視認性優先で Yusei Magic のまま */
+  assert.strictEqual(byId.handwrite.apply.name.font, 'kurenaido');
+  assert.strictEqual(byId.handwrite.apply.price.font, 'yusei');
 });
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
