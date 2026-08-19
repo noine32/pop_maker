@@ -26,13 +26,8 @@ eval(read('assets/js/doc.js'));             // defines POPDoc
 /* --- POPSheetView（描画は canvas 依存だが、幾何の純関数だけテストする） --- */
 eval(read('assets/js/sheet-view.js'));      // defines POPSheetView
 
-/* --- app.js から mergeDeep を抽出して読み込む --- */
-var appSrc = read('assets/js/app.js');
-var mdMatch = appSrc.match(/function mergeDeep\(base, patch\) \{[\s\S]*?\n  \}/);
-if (!mdMatch) throw new Error('mergeDeep をソースから抽出できませんでした');
-eval(mdMatch[0]);                           // defines mergeDeep
-
 /* --- app.js から parseValue を抽出して読み込む --- */
+var appSrc = read('assets/js/app.js');
 var pvMatch = appSrc.match(/function parseValue\(el\) \{[\s\S]*?\n  \}/);
 if (!pvMatch) throw new Error('parseValue をソースから抽出できませんでした');
 eval(pvMatch[0]);                           // defines parseValue
@@ -82,23 +77,23 @@ test('ptPx: 72pt @72dpi = 72px', function () { assert.ok(Math.abs(ptPx(72, 72 / 
 /* ---------- mergeDeep ---------- */
 test('mergeDeep: null で既定オブジェクトを潰さない', function () {
   var b = { design: { bg: '#000' } };
-  mergeDeep(b, { design: null });
+  POPDoc.mergeDeep(b, { design: null });
   assert.strictEqual(b.design.bg, '#000');
 });
 test('mergeDeep: プロトタイプ汚染を防ぐ', function () {
-  mergeDeep({ name: { text: '' } }, JSON.parse('{"__proto__":{"polluted":1}}'));
+  POPDoc.mergeDeep({ name: { text: '' } }, JSON.parse('{"__proto__":{"polluted":1}}'));
   assert.strictEqual(({}).polluted, undefined);
 });
 test('mergeDeep: 通常の深いマージ（未指定の既定は維持）', function () {
   var b = { name: { text: '', size: 10 }, price: { value: '' } };
-  mergeDeep(b, { name: { text: 'x' }, price: { value: '980' } });
+  POPDoc.mergeDeep(b, { name: { text: 'x' }, price: { value: '980' } });
   assert.strictEqual(b.name.text, 'x');
   assert.strictEqual(b.name.size, 10);
   assert.strictEqual(b.price.value, '980');
 });
 test('mergeDeep: オブジェクト枠をスカラーで潰さない', function () {
   var b = { badge: { text: 'a' } };
-  mergeDeep(b, { badge: true });
+  POPDoc.mergeDeep(b, { badge: true });
   assert.strictEqual(typeof b.badge, 'object');
 });
 

@@ -79,30 +79,6 @@
     cur[keys[keys.length - 1]] = value;
   }
 
-  /* 既定値に読み込んだデータを重ねる（項目が欠けていても壊れないように）。
-     不正な JSON（セクションが null / 型違いのスカラー）でも既定オブジェクトを
-     壊さない＝以後の描画クラッシュ・操作不能を防ぐ。 */
-  function mergeDeep(base, patch) {
-    if (!patch || typeof patch !== 'object') return base;
-    Object.keys(patch).forEach(function (k) {
-      /* プロトタイプ汚染対策：JSON.parse は __proto__ を列挙可能キーとして作るため、
-         base["__proto__"](=Object.prototype)への書き込みを防ぐ。 */
-      if (k === '__proto__' || k === 'constructor' || k === 'prototype') return;
-      var v = patch[k];
-      var baseIsObj = base[k] && typeof base[k] === 'object' && !Array.isArray(base[k]);
-      var vIsObj = v && typeof v === 'object' && !Array.isArray(v);
-      if (vIsObj && baseIsObj) {
-        mergeDeep(base[k], v);
-      } else if (baseIsObj) {
-        /* 既定がオブジェクトの枠は null・スカラーで上書きしない（既定を維持） */
-        return;
-      } else if (v !== undefined && v !== null) {
-        base[k] = v;
-      }
-    });
-    return base;
-  }
-
   /* ---------- 文字設定パネルの生成 ---------- */
   var TEXT_FIELDS = [
     { key: 'name',  label: '商品名',        min: 10, max: 300, lh: true },
@@ -472,7 +448,7 @@
     var patch = JSON.parse(JSON.stringify(t.apply));
     POPPresets.scaleCard(patch, POPPresets.scaleFor(210, 297, size.w, size.h), size);
     state.template = id;
-    mergeDeep(state, patch);
+    POPDoc.mergeDeep(state, patch);
     refreshAll(true);
   }
 
@@ -505,12 +481,13 @@
 
       var docPath = el.getAttribute('data-doc-path');
       if (docPath) {
-        /* カードの mm 入力は「入力中」に比例スケールを走らせない。
-           「90」と打つ途中の「9」で min=10 に丸められ、その値を基準に
-           全カードが縮み、続けて打っても scaleFor が 1 を返すため
-           元に戻らなくなるため（利用者の「文字を勝手に縮めるな」に反する）。 */
-        var isCardMm = (docPath === 'card.customW' || docPath === 'card.customH');
-        if (isCardMm && ev.type === 'input') {
+        /* 数値入力は「入力中」に丸めも比例スケールも走らせない。
+           「150」と打つ途中の「1」が最小値へ丸められ、その値を基準に
+           カードが切り詰められて全カードの文字が縮み、続けて打っても
+           scaleFor が 1 を返すため元に戻らなくなるため
+           （利用者の「文字を勝手に縮めるな」に反する）。
+           確定（change）を待って、そこで一度だけ整える。 */
+        if (ev.type === 'input' && (el.type === 'number' || el.type === 'range')) {
           if (el.value === '') return;              /* 空欄は未確定として無視する */
           setPath(doc, docPath, parseValue(el));
           refreshAll();
@@ -635,7 +612,7 @@
         state = POPDoc.activeCard(doc);
         lastCardSize = cardSizeMm();
         autosaveWarned = false;
-        refreshAll();
+        refreshAll(true);
         setStatus('データを読み込みました', true);
       }).catch(function (e) {
         setStatus(e.message, true);
@@ -650,7 +627,7 @@
       lastCardSize = cardSizeMm();
       POPStorage.clearAuto();
       autosaveWarned = false;
-      refreshAll();
+      refreshAll(true);
       setStatus('リセットしました', true);
     });
 
@@ -703,6 +680,18 @@
     if (document.fonts && document.fonts.ready) {
       document.fonts.ready.then(function () { refreshAll(); });
     }
+
+    /* タブを裏に回すと requestAnimationFrame が止まり、保存の予約も走らない。
+       そのまま閉じると直前の編集が失われるので、隠れる/離脱する時点で即保存する。
+       beforeunload はモバイルで発火しないことがあるため pagehide を使う。 */
+    function flushSave() {
+      if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+      POPStorage.saveAuto(doc);
+    }
+    window.addEventListener('pagehide', flushSave);
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'hidden') flushSave();
+    });
   }
 
   /* ---------- 起動 ---------- */

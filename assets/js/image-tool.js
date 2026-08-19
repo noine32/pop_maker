@@ -32,7 +32,11 @@ var POPImageTool = (function () {
     var flush = function (result) {
       var list = waiters[src] || [];
       delete waiters[src];
-      for (var i = 0; i < list.length; i++) list[i](result);
+      for (var i = 0; i < list.length; i++) {
+        /* 1つのコールバックの例外で残りが呼ばれなくなると、
+           書き出し側の待ち合わせが永久に終わらなくなるため個別に握る。 */
+        try { list[i](result); } catch (e) { /* noop */ }
+      }
     };
     im.onload = function () { cache[src] = im; flush(im); };
     im.onerror = function () { failed[src] = true; flush(null); };

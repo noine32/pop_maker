@@ -18,7 +18,8 @@ var POPDoc = (function () {
   function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
 
   /* 既定値へ読み込んだ値を重ねる（欠けたキーがあっても壊れないように）。
-     app.js の mergeDeep と同じ規則。プロトタイプ汚染も同様に防ぐ。 */
+     プロトタイプ汚染対策：JSON.parse は __proto__ を列挙可能キーとして作るため、
+     base["__proto__"](=Object.prototype)への書き込みを防ぐ。 */
   function mergeDeep(base, patch) {
     if (!patch || typeof patch !== 'object') return base;
     Object.keys(patch).forEach(function (k) {
