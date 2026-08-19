@@ -8,20 +8,34 @@ var POPImageTool = (function () {
   'use strict';
 
   var cfg = null;         /* { canvas, ctx, getCard, getCardSize, onChange, setStatus } */
-  var cache = {};         /* src -> HTMLImageElement */
-  var loading = {};
+  var cache = {};      /* src -> HTMLImageElement（読み込み成功） */
+  var failed = {};     /* src -> true（読み込めなかった。再試行しない） */
+  var waiters = {};    /* src -> [cb...]（読み込み中の待ち行列） */
   var drag = null;
   var enabled = true;
 
   /* ---------- 読み込みキャッシュ ---------- */
+  /* 画像を読み込んでキャッシュする。
+     読み込み中に同じ src で呼ばれたらコールバックを待ち行列へ積む。
+     捨ててしまうと、書き出し側の「全部読み終わるまで待つ」処理が
+     永久に終わらず印刷が始まらなくなるため。
+     失敗は failed に覚えて再試行しない。覚えないと毎フレーム挑戦し続け、
+     再描画が無限ループになる。 */
   function ensure(src, cb) {
     if (!src) { if (cb) cb(null); return; }
     if (cache[src]) { if (cb) cb(cache[src]); return; }
-    if (loading[src]) return;      /* 二重ロード防止（onload 完了時に再描画される） */
-    loading[src] = true;
+    if (failed[src]) { if (cb) cb(null); return; }
+    if (waiters[src]) { if (cb) waiters[src].push(cb); return; }
+
+    waiters[src] = cb ? [cb] : [];
     var im = new Image();
-    im.onload = function () { cache[src] = im; delete loading[src]; if (cb) cb(im); };
-    im.onerror = function () { delete loading[src]; if (cb) cb(null); };
+    var flush = function (result) {
+      var list = waiters[src] || [];
+      delete waiters[src];
+      for (var i = 0; i < list.length; i++) list[i](result);
+    };
+    im.onload = function () { cache[src] = im; flush(im); };
+    im.onerror = function () { failed[src] = true; flush(null); };
     im.src = src;
   }
 
@@ -30,6 +44,13 @@ var POPImageTool = (function () {
       無条件に再描画を要求すると無限ループになる）。 */
   function isLoaded(src) {
     return !!(src && cache[src]);
+  }
+
+  /** 読み込みが決着したか（成功・失敗のいずれか）。
+      再描画を要求してよいかの判断に使う。失敗を決着に含めないと、
+      壊れた画像で毎フレーム再描画を要求し続けることになる。 */
+  function isSettled(src) {
+    return !!(src && (cache[src] || failed[src]));
   }
 
   /** 今読み込めているぶんだけを返す（待たない） */
@@ -258,6 +279,7 @@ var POPImageTool = (function () {
     init: init,
     ensure: ensure,
     isLoaded: isLoaded,
+    isSettled: isSettled,
     assetsFor: assetsFor,
     assetsForCards: assetsForCards,
     waitForCard: waitForCard,

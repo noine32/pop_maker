@@ -349,7 +349,7 @@
     }
     targets.forEach(function (c) {
       var src = c && c.image && c.image.src;
-      if (!src || POPImageTool.isLoaded(src)) return;
+      if (!src || POPImageTool.isSettled(src)) return;
       POPImageTool.ensure(src, function () { refreshAll(); });
     });
   }
@@ -403,9 +403,18 @@
     document.getElementById('btn-print').disabled = !printable;
   }
 
-  /* 使用中のWebフォントが未読み込みなら読み込んでから描き直す */
+  /* 使用中のWebフォントが未読み込みなら読み込んでから描き直す。
+     シートタブではそのページに載る全カードぶんを集める。選択中カードだけ見ると、
+     一度も選んでいないカードが代替書体のまま描かれ、プレビューと印刷結果が食い違うため。 */
   function ensureFontsThenRerender() {
-    var specs = POPRenderer.usedFonts(state);
+    var specs = [];
+    if (previewMode === 'sheet') {
+      POPSheetView.cardIndexesOnPage(doc, pageIndex).forEach(function (i) {
+        POPRenderer.usedFonts(doc.cards[i]).forEach(function (s) { specs.push(s); });
+      });
+    } else {
+      specs = POPRenderer.usedFonts(state);
+    }
     var pending = specs.filter(function (s) {
       var f = POPFonts.byId[s.font];
       if (!f || !f.web) return false;
@@ -465,6 +474,17 @@
 
       var docPath = el.getAttribute('data-doc-path');
       if (docPath) {
+        /* カードの mm 入力は「入力中」に比例スケールを走らせない。
+           「90」と打つ途中の「9」で min=10 に丸められ、その値を基準に
+           全カードが縮み、続けて打っても scaleFor が 1 を返すため
+           元に戻らなくなるため（利用者の「文字を勝手に縮めるな」に反する）。 */
+        var isCardMm = (docPath === 'card.customW' || docPath === 'card.customH');
+        if (isCardMm && ev.type === 'input') {
+          if (el.value === '') return;              /* 空欄は未確定として無視する */
+          setPath(doc, docPath, parseValue(el));
+          refreshAll();
+          return;
+        }
         setPath(doc, docPath, parseValue(el));
         onDocChange(docPath);
         return;
@@ -582,6 +602,7 @@
         if (!loaded) { setStatus('読み込めるデータではありません', true); return; }
         doc = loaded;
         state = POPDoc.activeCard(doc);
+        lastCardSize = cardSizeMm();
         autosaveWarned = false;
         refreshAll();
         setStatus('データを読み込みました', true);
@@ -595,6 +616,7 @@
       if (!confirm('入力内容をすべて初期状態に戻します。よろしいですか？')) return;
       doc = POPDoc.defaultDoc();
       state = POPDoc.activeCard(doc);
+      lastCardSize = cardSizeMm();
       POPStorage.clearAuto();
       autosaveWarned = false;
       refreshAll();
