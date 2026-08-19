@@ -3292,6 +3292,13 @@ app.js が800行の上限に迫っていたため、出力処理は export-tool.
 
 各セクションの中身は次のとおり。
 
+> **クラス付けは既存に揃えること**: `<select>` と `<input type="number">` には
+> **`class="control"`** を、`<label class="field">` 直下のラベル `<span>` には
+> **`class="field__label"`** を付ける（このプロジェクトの全入力要素がそうなっている）。
+> チェックボックスと `field--inline` の説明文用 `<span>` には付けない。
+> 下のコードは構造を示すもので、実装時は必ず `index.html` の既存セクションを読んで
+> クラス付けを合わせること。
+
 ```html
 <!-- 3. カードの大きさ の sect__body の中身 -->
   <label class="field">
