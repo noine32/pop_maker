@@ -39,6 +39,24 @@ var ptMatch = rSrc.match(/function ptPx\(pt, pxPerMm, scale\) \{[\s\S]*?\n  \}/)
 if (!ptMatch) throw new Error('ptPx をソースから抽出できませんでした');
 eval(ptMatch[0]);                           // defines ptPx
 
+/* --- app.js から applyCardSizeChange を抽出して読み込む ----------------
+   「比例させない」チェックOFF区間で doc.scale を書き換えない、という
+   可逆性の要である分岐そのものを実ソースから検証するため、他の純関数と
+   同じ「正規表現で切り出して eval」の手法で取り込む。
+   自由変数（document/doc/lastCardSize/cardSizeMm/setStatus）は
+   呼び出し側のテストコードで用意する（下記 callApplyCardSizeChange）。 */
+var acscMatch = appSrc.match(/function applyCardSizeChange\(\) \{[\s\S]*?\n  \}/);
+if (!acscMatch) throw new Error('applyCardSizeChange をソースから抽出できませんでした');
+eval(acscMatch[0]);                          // defines applyCardSizeChange
+var doc, lastCardSize, document, setStatus;  // applyCardSizeChange が参照する自由変数
+function cardSizeMm() { return POPPresets.cardSize(doc.card); }
+/** scaleWithCard=チェックボックスの状態。doc.card を書き換えてから呼ぶ。 */
+function callApplyCardSizeChange(scaleWithCard) {
+  document = { getElementById: function () { return { checked: scaleWithCard }; } };
+  setStatus = function () {};
+  applyCardSizeChange();
+}
+
 /* --- ハーネス --- */
 var pass = 0, fail = 0;
 function test(name, fn) {
@@ -266,12 +284,14 @@ test('scaleCard: pt と余白が比例し、下限でクランプされる', fun
   assert.strictEqual(c.layout.gap, 3.5);
   assert.strictEqual(c.design.border.width, 0.6);
 });
-test('scaleCard: 文字は4pt・枠線は0.3mm を下回らない', function () {
+test('scaleCard: 文字は1pt・枠線は0.05mm を下回らない', function () {
+  /* 下限を 4pt/0.3mm から 1pt/0.05mm へ引き下げた（下限に張り付いた値が
+     元のサイズへ戻るとき膨らむのを防ぐため。描画側の安全弁は renderer.js 参照）。 */
   var c = POPPresets.defaultCardState();
   c.name.size = 10; c.design.border.width = 1.2;
-  POPPresets.scaleCard(c, 0.05, { w: 20, h: 20 });
-  assert.strictEqual(c.name.size, 4);
-  assert.strictEqual(c.design.border.width, 0.3);
+  POPPresets.scaleCard(c, 0.01, { w: 20, h: 20 });
+  assert.strictEqual(c.name.size, 1);
+  assert.strictEqual(c.design.border.width, 0.05);
 });
 test('scaleCard: 行間・色・文章は変えない', function () {
   var c = POPPresets.defaultCardState();
@@ -373,6 +393,55 @@ test('小刻みに縮めてから戻しても積み重ならない', function ()
   sc.applied = back.target;
   assert.ok(Math.abs(c.name.size - 64) < 0.5, 'name.size=' + c.name.size);
 });
+test('極端に縮めてから戻しても、小さい項目が元より大きくならない', function () {
+  var c = POPPresets.defaultCardState();
+  var sc = POPPresets.defaultScale(44, 67);
+  var note0 = c.note.size, border0 = c.design.border.width;
+  [20, 10, 44].forEach(function (w) {
+    var st = POPPresets.scaleStep(sc, w, 67);
+    POPPresets.scaleCard(c, st.delta, { w: w, h: 67 });
+    sc.applied = st.target;
+  });
+  /* 下限に張り付いた値が戻すときに大きな倍率を掛けられ、元より大きくなっていた。
+     border.width の許容誤差は 0.1mm 単位の丸め(r1)が3段を経て蓄積するぶんを見込んで
+     0.15 とする（実測: 3段の往復で 1.2mm→1.3mm、丸めのみの誤差で floor には未到達）。 */
+  assert.ok(Math.abs(c.note.size - note0) < 0.5, 'note.size=' + c.note.size + ' (元 ' + note0 + ')');
+  assert.ok(Math.abs(c.design.border.width - border0) < 0.15,
+            'border.width=' + c.design.border.width + ' (元 ' + border0 + ')');
+  assert.ok(Math.abs(c.name.size - 64) < 0.5, 'name.size=' + c.name.size);
+});
+test('比例させない区間を挟んでも、元のサイズに戻せば文字は元のまま', function () {
+  var c = POPPresets.defaultCardState();
+  var sc = POPPresets.defaultScale(44, 67);
+  var size0 = c.name.size;
+  /* 「文字とレイアウトも比例させる」を外して 30×50 へ変えた＝値も基準も触らない */
+  /* そのあとチェックを入れて 44×67 へ戻す */
+  var st = POPPresets.scaleStep(sc, 44, 67);
+  POPPresets.scaleCard(c, st.delta, { w: 44, h: 67 });
+  sc.applied = st.target;
+  assert.strictEqual(st.target, 1);
+  assert.ok(Math.abs(c.name.size - size0) < 0.01, 'name.size=' + c.name.size);
+});
+test('applyCardSizeChange（実ソース）: OFF区間を挟んでも元のサイズへ戻せば文字は膨らまない', function () {
+  /* 上のテストは POPPresets の基準計算だけを検証しており、実際にバグがあった
+     app.js の分岐（チェックOFF時に doc.scale を置き直していた箇所）は通っていない。
+     ここでは app.js から実際の applyCardSizeChange を抽出して直接呼び、
+     「OFF のまま30×50へ→ONで44×67へ戻す」という実測の再現手順そのものを検証する。 */
+  var card = POPPresets.defaultCardState();
+  card.name.size = 64;
+  doc = {
+    card: { id: 'custom', customW: 44, customH: 67 },
+    scale: POPPresets.defaultScale(44, 67),
+    cards: [card]
+  };
+  lastCardSize = null;
+  callApplyCardSizeChange(true);                              /* 初回は基準記録のみ */
+  doc.card = { id: 'custom', customW: 30, customH: 50 };
+  callApplyCardSizeChange(false);                              /* OFF: 30×50 へ（値据え置き） */
+  doc.card = { id: 'custom', customW: 44, customH: 67 };
+  callApplyCardSizeChange(true);                               /* ON: 44×67 へ戻す */
+  assert.ok(Math.abs(card.name.size - 64) < 0.5, 'name.size=' + card.name.size);
+});
 
 /* ---------- POPDoc（ドキュメント操作・移行） ---------- */
 test('defaultDoc: カード1枚・44×67mm・A4シート', function () {
@@ -396,6 +465,14 @@ test('normalize: scale が無い古いデータでも補われる', function () 
   POPDoc.normalize(d);
   assert.strictEqual(d.scale.applied, 1);
   assert.strictEqual(d.scale.baseW, 44);
+});
+test('normalize: 基準が壊れていても現在のカードサイズで補われる', function () {
+  var d = POPDoc.defaultDoc();
+  d.scale = { baseW: 0, baseH: -5, applied: 1 };
+  POPDoc.normalize(d);
+  assert.strictEqual(d.scale.baseW, 44);
+  assert.strictEqual(d.scale.baseH, 67);
+  assert.ok(isFinite(POPPresets.scaleStep(d.scale, 30, 67).target));
 });
 test('migrate: v1（A4の単品）→ カード1枚・シートもA4・余白0', function () {
   var v1 = POPPresets.sampleState();

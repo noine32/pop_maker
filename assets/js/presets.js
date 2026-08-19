@@ -291,19 +291,23 @@ var POPPresets = (function () {
     obj[key] = Math.max(min, r1(n * scale));
   }
 
+  /* 下限を低くしてあるのは、下限に張り付いた値を元のサイズへ戻すときに
+     大きな倍率が掛かって元より大きくなってしまうのを避けるため
+     （実測: 注記12pt が 10mm カードで 4pt に張り付き、44mm へ戻すと 17.6pt になった）。
+     文字や線が消える心配は不要で、描画側に安全弁がある
+     （renderer.js の ptPx が最低1px、drawBorder が最低0.5px を保証）。 */
   /** カードの pt・余白・画像を破壊的にスケールする。sizeMm は新しいカード寸法。 */
   function scaleCard(card, scale, sizeMm) {
     if (!card || !isFinite(scale) || scale === 1) return card;
 
-    SCALE_TEXT_KEYS.forEach(function (k) { scaleProp(card[k], 'size', scale, 4); });
-    scaleProp(card.badge, 'size', scale, 4);
+    SCALE_TEXT_KEYS.forEach(function (k) { scaleProp(card[k], 'size', scale, 1); });
+    scaleProp(card.badge, 'size', scale, 1);
 
     scaleProp(card.layout, 'padding', scale, 0);
     scaleProp(card.layout, 'gap', scale, 0);
 
-    /* 枠線も比例させる。不変にすると小さいカードで相対的に太くなりすぎるため。
-       細くなりすぎる側は 0.3mm（300dpiで約3.5px＝印刷で視認できる）で止める。 */
-    if (card.design) scaleProp(card.design.border, 'width', scale, 0.3);
+    /* 枠線も比例させる。不変にすると小さいカードで相対的に太くなりすぎるため。 */
+    if (card.design) scaleProp(card.design.border, 'width', scale, 0.05);
 
     if (card.image && card.image.src) {
       scaleProp(card.image, 'wMm', scale, 10);

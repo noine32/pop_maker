@@ -99,9 +99,13 @@ var POPDoc = (function () {
     doc.sheet.margin = clamp(num(doc.sheet.margin, 5), 0, 30);
     doc.sheet.gap = clamp(num(doc.sheet.gap, 0), 0, 20);
 
-    /* 比例計算の基準。古い保存データには無いので、現在のカードサイズを基準として補う。 */
+    /* 比例計算の基準。古い保存データには無いので、現在のカードサイズを基準として補う。
+       基準が 0 や不正値だと scaleFor が Infinity を返し、以後の比例調整が
+       効かなくなるので applied と同様に検証する。 */
     var cardMm = POPPresets.cardSize(doc.card);
     doc.scale = mergeDeep(POPPresets.defaultScale(cardMm.w, cardMm.h), doc.scale);
+    if (!(Number(doc.scale.baseW) > 0)) doc.scale.baseW = cardMm.w;
+    if (!(Number(doc.scale.baseH) > 0)) doc.scale.baseH = cardMm.h;
     if (!(Number(doc.scale.applied) > 0)) doc.scale.applied = 1;
 
     if (!Array.isArray(doc.cards) || !doc.cards.length) {

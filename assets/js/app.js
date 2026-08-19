@@ -469,9 +469,11 @@
       }
       doc.scale.applied = step.target;
     } else {
-      /* 比例させない指定のときは「今の見た目がこの大きさに対して正しい」とみなし、
-         基準を置き直す。そうしないと次に比例させたとき古い基準で計算されてしまう。 */
-      doc.scale = POPPresets.defaultScale(next.w, next.h);
+      /* 比例させない指定のときは doc.scale を書き換えない。
+         値を変えていないのに基準だけ置き直すと、チェックを戻して元のサイズへ
+         戻したときに倍率が 1 にならず、文字が元より大きくなってしまうため
+         （実測: 44×67 → OFFで30×50 → ONで44×67 に戻すと 64pt が 85.8pt になった）。
+         基準は最後に比例させた時点のものを持ち越す。 */
       doc.cards.forEach(function (c) { POPPresets.clampImage(c.image, next); });
     }
     lastCardSize = next;
