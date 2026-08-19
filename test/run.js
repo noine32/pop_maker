@@ -804,7 +804,8 @@ test('fonts: 既存 web フォントの weights が旧 <link> と一致する', 
   var expected = {
     notosans:  [400, 700, 900],
     notoserif: [400, 700, 900],
-    rounded:   [400, 700, 800],
+    /* 800 は太さの選択欄に無い値だった。極太=900 に揃えたので 900 を要求する */
+    rounded:   [400, 700, 900],
     kaisei:    [400, 700]
   };
   Object.keys(expected).forEach(function (id) {
@@ -851,6 +852,50 @@ test('cssUrl: 全 web フォントで https の css2 URL になる', function ()
     assert.ok(u.indexOf(' ') < 0, 'URL に空白: ' + f.id);
     assert.ok(u.indexOf('&display=swap') > 0, 'display=swap が無い: ' + f.id);
   });
+});
+
+/* ---------- テンプレート ---------- */
+var TEXT_KEYS = ['catch', 'name', 'price', 'desc', 'note'];
+
+test('templates: 9種あり id が一意', function () {
+  assert.strictEqual(POPPresets.TEMPLATES.length, 9);
+  var seen = {};
+  POPPresets.TEMPLATES.forEach(function (t) {
+    assert.ok(!seen[t.id], 'id が重複: ' + t.id);
+    seen[t.id] = true;
+  });
+});
+
+test('templates: 参照する font id が全て実在する', function () {
+  POPPresets.TEMPLATES.forEach(function (t) {
+    TEXT_KEYS.forEach(function (k) {
+      var id = t.apply[k].font;
+      assert.ok(POPFonts.byId[id], t.id + '.' + k + ' が未定義フォントを参照: ' + id);
+    });
+  });
+});
+
+test('templates: weight は 400/700/900 のみ', function () {
+  /* 太さの選択欄の option が この3つしか無く、他を入れると
+     次の操作で黙って 400 に戻るため */
+  POPPresets.TEMPLATES.forEach(function (t) {
+    TEXT_KEYS.forEach(function (k) {
+      var w = t.apply[k].weight;
+      assert.ok([400, 700, 900].indexOf(w) >= 0,
+        t.id + '.' + k + ' の weight が不正: ' + w);
+    });
+  });
+});
+
+test('templates: 追加3種と改良した手書き風が期待どおり', function () {
+  var byId = {};
+  POPPresets.TEMPLATES.forEach(function (t) { byId[t.id] = t; });
+  ['cute', 'japanese', 'retro'].forEach(function (id) {
+    assert.ok(byId[id], '未定義のテンプレート: ' + id);
+  });
+  /* 手書き風の商品名は Zen Kurenaido、価格は視認性優先で Yusei Magic のまま */
+  assert.strictEqual(byId.handwrite.apply.name.font, 'kurenaido');
+  assert.strictEqual(byId.handwrite.apply.price.font, 'yusei');
 });
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

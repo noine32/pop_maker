@@ -32,7 +32,7 @@ var POPFonts = (function () {
     { id: 'kaisei',     group: '明朝体', label: 'Kaisei Decol（やわらか明朝・Web）', stack: '"Kaisei Decol",' + SERIF,    web: 'Kaisei Decol',      weights: [400, 700] },
 
     /* 丸ゴシック */
-    { id: 'rounded',    group: '丸ゴシック', label: 'M PLUS Rounded 1c（丸・Web）', stack: '"M PLUS Rounded 1c",' + MARU, web: 'M PLUS Rounded 1c', weights: [400, 700, 800] },
+    { id: 'rounded',    group: '丸ゴシック', label: 'M PLUS Rounded 1c（丸・Web）', stack: '"M PLUS Rounded 1c",' + MARU, web: 'M PLUS Rounded 1c', weights: [400, 700, 900] },
     { id: 'kosugimaru', group: '丸ゴシック', label: '小杉丸ゴシック（Web）',         stack: '"Kosugi Maru",' + MARU,       web: 'Kosugi Maru' },
     { id: 'rocknroll',  group: '丸ゴシック', label: 'RocknRoll One（ポップ・Web）',  stack: '"RocknRoll One",' + MARU,     web: 'RocknRoll One' },
 
