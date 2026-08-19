@@ -472,5 +472,46 @@
 <script src="assets/js/preset-ui.js"></script>
 <script src="assets/js/export-tool.js"></script>
 <script src="assets/js/app.js"></script>
+
+<script>
+/* 更新直後は、新しい index.html と古いキャッシュの JS が混ざって読み込まれることがある
+   （配信元が同じでも資産ごとにキャッシュの有効期限が独立しているため）。その状態だと
+   画面が黙って動かなくなり、原因も分からないので、ここで必要な部品が揃っているか確かめ、
+   揃っていなければ再読み込みを促す。この検査を index.html に置いているのは、
+   利用者が実際に取りに行くこのファイルだけは必ず新しい版が実行されるため。 */
+(function () {
+  'use strict';
+  var need = [
+    ['POPPresets',   'presets.js',     'cardSize'],
+    ['POPImposition','imposition.js',  'computeLayout'],
+    ['POPRenderer',  'renderer.js',    'draw'],
+    ['POPSheetView', 'sheet-view.js',  'drawSheet'],
+    ['POPDoc',       'doc.js',         'sampleDoc'],
+    ['POPStorage',   'storage.js',     'loadLegacyAuto'],
+    ['POPImageTool', 'image-tool.js',  'isSettled'],
+    ['POPPresetUI',  'preset-ui.js',   'render'],
+    ['POPExport',    'export-tool.js', 'print'],
+    ['POPCardsUI',   'cards-ui.js',    'refreshActive']
+  ];
+  var missing = [];
+  for (var i = 0; i < need.length; i++) {
+    var g = window[need[i][0]];
+    if (!g || typeof g[need[i][2]] !== 'function') missing.push(need[i][1]);
+  }
+  if (!missing.length) return;
+
+  var msg = '更新後の読み込みが完了していません（古いまま: ' + missing.join(' / ') +
+    '）。ページを再読み込みしてください（Windows: Ctrl+F5 ／ Mac: Command+Shift+R）。';
+  var box = document.createElement('p');
+  box.setAttribute('role', 'alert');
+  box.style.cssText = 'margin:16px;padding:16px;border:2px solid #b91c1c;border-radius:8px;' +
+    'color:#b91c1c;font-weight:700;line-height:1.7;background:#fef2f2';
+  box.textContent = msg;
+  if (document.body) document.body.insertBefore(box, document.body.firstChild);
+  var st = document.getElementById('status');
+  if (st) st.textContent = msg;
+  if (window.console && console.error) console.error(msg);
+})();
+</script>
 </body>
 </html>
