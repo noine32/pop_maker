@@ -68,17 +68,56 @@ var POPFonts = (function () {
     return String(weight || 400) + ' ' + Math.max(1, sizePx) + 'px ' + stack(id);
   }
 
+  /* ---------- Webフォントの遅延ロード ----------
+     全フォントの CSS を起動時に読むと、日本語フォントは1ファミリーあたり
+     約120個の @font-face 宣言があるため CSS だけで数百KBに達する。
+     実際に選ばれたファミリーの CSS だけを、選ばれた時に読む。 */
+
+  /** Google Fonts の CSS URL を組み立てる（純関数） */
+  function cssUrl(f) {
+    var q = 'family=' + f.web.replace(/ /g, '+');
+    if (f.weights && f.weights.length) q += ':wght@' + f.weights.join(';');
+    return 'https://fonts.googleapis.com/css2?' + q + '&display=swap';
+  }
+
+  /* 回線が無応答のまま返らないと、印刷やPNG書き出しが待ち続けて固まる。
+     成否が分からないまま一定時間で打ち切る。 */
+  var CSS_TIMEOUT_MS = 8000;
+  var cssLoaded = {};        /* family -> Promise<boolean>（注入は1回だけ） */
+
+  /** ファミリーの CSS を <link> で注入する。成否によらず必ず resolve する */
+  function loadFamilyCss(f) {
+    if (cssLoaded[f.web]) return cssLoaded[f.web];
+    cssLoaded[f.web] = new Promise(function (resolve) {
+      var done = false;
+      function finish(ok) { if (!done) { done = true; resolve(ok); } }
+      var link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = cssUrl(f);
+      link.onload = function () { finish(true); };
+      link.onerror = function () { finish(false); };   /* オフラインでも描画は止めない */
+      document.head.appendChild(link);
+      setTimeout(function () { finish(false); }, CSS_TIMEOUT_MS);
+    });
+    return cssLoaded[f.web];
+  }
+
   /**
    * 指定フォント（Webフォント）が canvas で使えるよう読み込む。
+   * CSS をまだ注入していなければ先に注入し、その onload を待ってから
+   * document.fonts.load() を呼ぶ。先に呼ぶと @font-face が未登録で空振りする。
    * すでに読み込み済みなら即 resolve。失敗しても resolve（fallback表示になる）。
    */
   function ensureFont(id, weight) {
     var f = byId[id];
-    if (!f || !f.web || !document.fonts || !document.fonts.load) return Promise.resolve(false);
-    var spec = String(weight || 400) + ' 32px "' + f.web + '"';
-    return document.fonts.load(spec, 'あア亜0Aa')
-      .then(function (list) { return list && list.length > 0; })
-      .catch(function () { return false; });
+    if (!f || !f.web) return Promise.resolve(false);
+    return loadFamilyCss(f).then(function () {
+      if (!document.fonts || !document.fonts.load) return false;
+      var spec = String(weight || 400) + ' 32px "' + f.web + '"';
+      return document.fonts.load(spec, 'あア亜0Aa')
+        .then(function (list) { return list && list.length > 0; })
+        .catch(function () { return false; });
+    });
   }
 
   /** 状態で使われている全フォントを読み込む */
@@ -87,5 +126,6 @@ var POPFonts = (function () {
       .then(function (r) { return r.some(Boolean); });
   }
 
-  return { LIST: LIST, byId: byId, stack: stack, cssFont: cssFont, ensureFont: ensureFont, ensureAll: ensureAll };
+  return { LIST: LIST, byId: byId, stack: stack, cssFont: cssFont,
+           cssUrl: cssUrl, ensureFont: ensureFont, ensureAll: ensureAll };
 })();

@@ -825,5 +825,33 @@ test('fonts: 追加した手書き系11種が存在する', function () {
   });
 });
 
+test('cssUrl: 単一ウェイトは wght を付けない', function () {
+  assert.strictEqual(
+    POPFonts.cssUrl(POPFonts.byId.kurenaido),
+    'https://fonts.googleapis.com/css2?family=Zen+Kurenaido&display=swap');
+});
+
+test('cssUrl: 複数ウェイトは wght@ で列挙する', function () {
+  assert.strictEqual(
+    POPFonts.cssUrl(POPFonts.byId.notosans),
+    'https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap');
+});
+
+test('cssUrl: 空白は + に置換される（複数語の family）', function () {
+  assert.strictEqual(
+    POPFonts.cssUrl(POPFonts.byId.hachimaru),
+    'https://fonts.googleapis.com/css2?family=Hachi+Maru+Pop&display=swap');
+});
+
+test('cssUrl: 全 web フォントで https の css2 URL になる', function () {
+  POPFonts.LIST.forEach(function (f) {
+    if (!f.web) return;
+    var u = POPFonts.cssUrl(f);
+    assert.ok(u.indexOf('https://fonts.googleapis.com/css2?family=') === 0, 'URL 不正: ' + f.id);
+    assert.ok(u.indexOf(' ') < 0, 'URL に空白: ' + f.id);
+    assert.ok(u.indexOf('&display=swap') > 0, 'display=swap が無い: ' + f.id);
+  });
+});
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
