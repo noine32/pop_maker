@@ -520,8 +520,12 @@
       doc.sheet.margin = Math.max(0, Math.min(30, Number(doc.sheet.margin) || 0));
       doc.sheet.gap = Math.max(0, Math.min(20, Number(doc.sheet.gap) || 0));
 
-      /* カスタムカードはシート内寸へ丸める。プリセットは丸めず警告だけ（設計 §4）。 */
-      if (doc.card.id === 'custom') {
+      /* 丸めるのはカードの mm 欄を直接いじったときだけ。
+         用紙や余白を変えたときにカードの寸法まで黙って書き換えると、
+         利用者が指定した大きさが失われる（設計 §4「カードサイズを黙って
+         書き換えるのはカスタム入力時のみ」）。入らない場合は updateMeta が
+         「カードがシートより大きいため配置できません」と警告する。 */
+      if (docPath.indexOf('card.') === 0 && doc.card.id === 'custom') {
         var c = POPPresets.clampCustomCard(doc.card, doc.sheet);
         doc.card.customW = c.customW;
         doc.card.customH = c.customH;

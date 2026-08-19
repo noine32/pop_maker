@@ -22,6 +22,12 @@
 
 * { box-sizing: border-box; }
 
+/* HTML の hidden 属性を確実に効かせる。
+   .field-row { display: flex } のようなクラス指定は、hidden の既定スタイル
+   （display:none）より詳細度が高く、そのままだと隠れない。
+   隠す/隠さないは JS が hidden 属性で制御しているので、ここで一括して優先させる。 */
+[hidden] { display: none !important; }
+
 html, body {
   margin: 0;
   padding: 0;
