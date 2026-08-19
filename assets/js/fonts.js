@@ -12,19 +12,47 @@ var POPFonts = (function () {
   var SERIF = '"Hiragino Mincho ProN","Yu Mincho","YuMincho","MS PMincho","Noto Serif JP",serif';
   var MARU = '"Hiragino Maru Gothic ProN","Kosugi Maru","M PLUS Rounded 1c",' + SANS;
 
+  /* group は選択欄の optgroup にそのまま出る。LIST の並び順が画面の並び順で、
+     同じ group は必ず連続させること（分断すると optgroup が二重に出る）。
+     weights は Google Fonts に要求するウェイト。省略＝単一ウェイト(400)。
+     fallback（stack の 2 番目以降）は、ネット不通時に性格の近い書体で代替するために選ぶ。 */
   var LIST = [
-    { id: 'sans',       label: 'ゴシック体（標準）',        stack: SANS,  web: null },
-    { id: 'serif',      label: '明朝体',                    stack: SERIF, web: null },
-    { id: 'maru',       label: '丸ゴシック体',              stack: MARU,  web: null },
-    { id: 'notosans',   label: 'Noto Sans JP（Web）',       stack: '"Noto Sans JP",' + SANS,        web: 'Noto Sans JP' },
-    { id: 'notoserif',  label: 'Noto Serif JP（Web）',      stack: '"Noto Serif JP",' + SERIF,      web: 'Noto Serif JP' },
-    { id: 'rounded',    label: 'M PLUS Rounded 1c（丸・Web）', stack: '"M PLUS Rounded 1c",' + MARU, web: 'M PLUS Rounded 1c' },
-    { id: 'kosugimaru', label: '小杉丸ゴシック（Web）',     stack: '"Kosugi Maru",' + MARU,         web: 'Kosugi Maru' },
-    { id: 'dela',       label: 'Dela Gothic One（極太・Web）', stack: '"Dela Gothic One",' + SANS,  web: 'Dela Gothic One' },
-    { id: 'rocknroll',  label: 'RocknRoll One（ポップ・Web）', stack: '"RocknRoll One",' + MARU,    web: 'RocknRoll One' },
-    { id: 'yusei',      label: 'Yusei Magic（手書き風・Web）', stack: '"Yusei Magic",' + SANS,      web: 'Yusei Magic' },
-    { id: 'kaisei',     label: 'Kaisei Decol（やわらか明朝・Web）', stack: '"Kaisei Decol",' + SERIF, web: 'Kaisei Decol' },
-    { id: 'stick',      label: 'Stick（角ゴ細・Web）',      stack: '"Stick",' + SANS,               web: 'Stick' }
+    /* 標準（このPCのフォント） */
+    { id: 'sans',       group: '標準（このPCのフォント）', label: 'ゴシック体（標準）', stack: SANS,  web: null },
+    { id: 'serif',      group: '標準（このPCのフォント）', label: '明朝体',             stack: SERIF, web: null },
+    { id: 'maru',       group: '標準（このPCのフォント）', label: '丸ゴシック体',       stack: MARU,  web: null },
+
+    /* ゴシック体 */
+    { id: 'notosans',   group: 'ゴシック体', label: 'Noto Sans JP（Web）',          stack: '"Noto Sans JP",' + SANS,       web: 'Noto Sans JP',      weights: [400, 700, 900] },
+    { id: 'stick',      group: 'ゴシック体', label: 'Stick（角ゴ細・Web）',         stack: '"Stick",' + SANS,              web: 'Stick' },
+    { id: 'dela',       group: 'ゴシック体', label: 'Dela Gothic One（極太・Web）', stack: '"Dela Gothic One",' + SANS,    web: 'Dela Gothic One' },
+
+    /* 明朝体 */
+    { id: 'notoserif',  group: '明朝体', label: 'Noto Serif JP（Web）',              stack: '"Noto Serif JP",' + SERIF,   web: 'Noto Serif JP',     weights: [400, 700, 900] },
+    { id: 'kaisei',     group: '明朝体', label: 'Kaisei Decol（やわらか明朝・Web）', stack: '"Kaisei Decol",' + SERIF,    web: 'Kaisei Decol',      weights: [400, 700] },
+
+    /* 丸ゴシック */
+    { id: 'rounded',    group: '丸ゴシック', label: 'M PLUS Rounded 1c（丸・Web）', stack: '"M PLUS Rounded 1c",' + MARU, web: 'M PLUS Rounded 1c', weights: [400, 700, 800] },
+    { id: 'kosugimaru', group: '丸ゴシック', label: '小杉丸ゴシック（Web）',         stack: '"Kosugi Maru",' + MARU,       web: 'Kosugi Maru' },
+    { id: 'rocknroll',  group: '丸ゴシック', label: 'RocknRoll One（ポップ・Web）',  stack: '"RocknRoll One",' + MARU,     web: 'RocknRoll One' },
+
+    /* 手書き */
+    { id: 'yusei',      group: '手書き', label: 'Yusei Magic（手書き風・Web）',   stack: '"Yusei Magic",' + SANS,    web: 'Yusei Magic' },
+    { id: 'kurenaido',  group: '手書き', label: 'Zen Kurenaido（鉛筆風・Web）',   stack: '"Zen Kurenaido",' + SANS,  web: 'Zen Kurenaido' },
+    { id: 'klee',       group: '手書き', label: 'Klee One（硬筆・Web）',          stack: '"Klee One",' + SERIF,      web: 'Klee One',      weights: [400, 600] },
+    { id: 'yomogi',     group: '手書き', label: 'Yomogi（ゆるカジュアル・Web）',  stack: '"Yomogi",' + SANS,         web: 'Yomogi' },
+
+    /* 筆・和レトロ */
+    { id: 'yujisyuku',  group: '筆・和レトロ', label: 'Yuji Syuku（筆・楷書・Web）',    stack: '"Yuji Syuku",' + SERIF,  web: 'Yuji Syuku' },
+    { id: 'yujiboku',   group: '筆・和レトロ', label: 'Yuji Boku（筆・素朴・Web）',     stack: '"Yuji Boku",' + SERIF,   web: 'Yuji Boku' },
+    { id: 'yujimai',    group: '筆・和レトロ', label: 'Yuji Mai（筆・流麗・Web）',      stack: '"Yuji Mai",' + SERIF,    web: 'Yuji Mai' },
+    { id: 'tegomin',    group: '筆・和レトロ', label: 'New Tegomin（手書き明朝・Web）', stack: '"New Tegomin",' + SERIF, web: 'New Tegomin' },
+    { id: 'kiwimaru',   group: '筆・和レトロ', label: 'Kiwi Maru（丸明朝・Web）',       stack: '"Kiwi Maru",' + SERIF,   web: 'Kiwi Maru',   weights: [400, 500] },
+
+    /* かわいい・ポップ */
+    { id: 'hachimaru',  group: 'かわいい・ポップ', label: 'Hachi Maru Pop（丸文字・Web）',     stack: '"Hachi Maru Pop",' + MARU, web: 'Hachi Maru Pop' },
+    { id: 'mochiy',     group: 'かわいい・ポップ', label: 'Mochiy Pop One（太丸ポップ・Web）', stack: '"Mochiy Pop One",' + MARU, web: 'Mochiy Pop One' },
+    { id: 'potta',      group: 'かわいい・ポップ', label: 'Potta One（太マーカー・Web）',      stack: '"Potta One",' + MARU,      web: 'Potta One' }
   ];
 
   var byId = {};

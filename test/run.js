@@ -14,6 +14,9 @@ function read(f) { return fs.readFileSync(path.join(ROOT, f), 'utf8'); }
 /* --- POPText（純粋・DOM非依存）をそのまま読み込む --- */
 eval(read('assets/js/text.js'));            // defines POPText
 
+/* --- POPFonts（LIST と cssUrl は DOM 非依存） --- */
+eval(read('assets/js/fonts.js'));           // defines POPFonts
+
 /* --- POPImposition（純粋・DOM非依存）をそのまま読み込む --- */
 eval(read('assets/js/imposition.js'));      // defines POPImposition
 
@@ -754,6 +757,72 @@ test('wrap: サロゲートペア（絵文字）を壊さない', function () {
 test('wrap: 改行を段落として保持', function () {
   var ctx = mockCtx();
   assert.deepStrictEqual(POPText.wrap(ctx, 'あ\nい', 100), ['あ', 'い']);
+});
+
+/* ---------- フォント定義 ---------- */
+var FONT_GROUPS = ['標準（このPCのフォント）', 'ゴシック体', '明朝体', '丸ゴシック',
+                   '手書き', '筆・和レトロ', 'かわいい・ポップ'];
+
+test('fonts: id が一意', function () {
+  var seen = {};
+  POPFonts.LIST.forEach(function (f) {
+    assert.ok(!seen[f.id], 'id が重複: ' + f.id);
+    seen[f.id] = true;
+  });
+  assert.strictEqual(POPFonts.LIST.length, 23);
+});
+
+test('fonts: 全エントリに既知の group がある', function () {
+  POPFonts.LIST.forEach(function (f) {
+    assert.ok(FONT_GROUPS.indexOf(f.group) >= 0, '未知の group: ' + f.id + ' / ' + f.group);
+  });
+});
+
+test('fonts: LIST 内で同じ group が連続している', function () {
+  /* 連続していないと optgroup が同名で分断されるため */
+  var seenGroups = [];
+  var prev = null;
+  POPFonts.LIST.forEach(function (f) {
+    if (f.group !== prev) {
+      assert.ok(seenGroups.indexOf(f.group) < 0, 'group が分断: ' + f.group);
+      seenGroups.push(f.group);
+      prev = f.group;
+    }
+  });
+});
+
+test('fonts: web フォントの stack に自身の family 名が含まれる', function () {
+  POPFonts.LIST.forEach(function (f) {
+    if (!f.web) return;
+    assert.ok(f.stack.indexOf('"' + f.web + '"') === 0,
+      'stack の先頭が自身の family でない: ' + f.id);
+  });
+});
+
+test('fonts: 既存 web フォントの weights が旧 <link> と一致する', function () {
+  /* 静的 <link> を消したあとも太字・極太が実体のあるウェイトで出ることを守る */
+  var expected = {
+    notosans:  [400, 700, 900],
+    notoserif: [400, 700, 900],
+    rounded:   [400, 700, 800],
+    kaisei:    [400, 700]
+  };
+  Object.keys(expected).forEach(function (id) {
+    assert.deepStrictEqual(POPFonts.byId[id].weights, expected[id], 'weights 不一致: ' + id);
+  });
+  /* 単一ウェイトのものは weights を持たない */
+  ['kosugimaru', 'dela', 'rocknroll', 'yusei', 'stick'].forEach(function (id) {
+    assert.strictEqual(POPFonts.byId[id].weights, undefined, 'weights 不要: ' + id);
+  });
+});
+
+test('fonts: 追加した手書き系11種が存在する', function () {
+  ['kurenaido', 'klee', 'yomogi', 'yujisyuku', 'yujiboku', 'yujimai',
+   'tegomin', 'kiwimaru', 'hachimaru', 'mochiy', 'potta'].forEach(function (id) {
+    var f = POPFonts.byId[id];
+    assert.ok(f, '未定義: ' + id);
+    assert.ok(f.web, 'web フォントとして定義されていない: ' + id);
+  });
 });
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
