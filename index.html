@@ -468,6 +468,7 @@
 <script src="assets/js/doc.js"></script>
 <script src="assets/js/storage.js"></script>
 <script src="assets/js/cards-ui.js"></script>
+<script src="assets/js/panels-ui.js"></script>
 <script src="assets/js/image-tool.js"></script>
 <script src="assets/js/preset-ui.js"></script>
 <script src="assets/js/export-tool.js"></script>
@@ -482,6 +483,8 @@
 (function () {
   'use strict';
   var need = [
+    ['POPFonts',     'fonts.js',       'ensureAll'],
+    ['POPText',      'text.js',        'wrap'],
     ['POPPresets',   'presets.js',     'cardSize'],
     ['POPImposition','imposition.js',  'computeLayout'],
     ['POPRenderer',  'renderer.js',    'draw'],
@@ -491,7 +494,8 @@
     ['POPImageTool', 'image-tool.js',  'isSettled'],
     ['POPPresetUI',  'preset-ui.js',   'render'],
     ['POPExport',    'export-tool.js', 'print'],
-    ['POPCardsUI',   'cards-ui.js',    'refreshActive']
+    ['POPCardsUI',   'cards-ui.js',    'refreshActive'],
+    ['POPPanelsUI',  'panels-ui.js',   'build']
   ];
   var missing = [];
   for (var i = 0; i < need.length; i++) {

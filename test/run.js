@@ -246,6 +246,15 @@ test('cardSize: 不正値・未知のidは既定44×67', function () {
   assert.deepStrictEqual(
     POPPresets.cardSize({ id: 'custom', customW: 'abc', customH: null }), { w: 44, h: 67 });
 });
+test('cardSize: 67×44mm（横）のプリセットがある', function () {
+  assert.deepStrictEqual(POPPresets.cardSize({ id: 'c67x44' }), { w: 67, h: 44 });
+  /* 縦横が入れ替わっただけなので、両者の間を行き来しても文字は縮まない */
+  assert.strictEqual(POPPresets.scaleFor(44, 67, 67, 44), 1);
+});
+test('CARD_SIZES: 既定は 44×67mm のまま', function () {
+  assert.strictEqual(POPPresets.CARD_SIZES[0].id, 'c44x67');
+  assert.deepStrictEqual(POPPresets.cardSize(POPPresets.defaultCard()), { w: 44, h: 67 });
+});
 test('sheetSize: landscape で幅と高さが入れ替わる', function () {
   assert.deepStrictEqual(POPPresets.sheetSize({ id: 'a4' }), { w: 210, h: 297 });
   assert.deepStrictEqual(
