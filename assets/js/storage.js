@@ -4,7 +4,8 @@
 var POPStorage = (function () {
   'use strict';
 
-  var AUTO_KEY = 'popmaker.autosave.v1';
+  var AUTO_KEY = 'popmaker.doc.v2';
+  var LEGACY_AUTO_KEY = 'popmaker.autosave.v1';   /* 旧「単品」形式。読むだけで消さない */
   var PRESET_KEY = 'popmaker.presets.v1';
 
   function available() {
@@ -29,6 +30,15 @@ var POPStorage = (function () {
     if (!ok) return null;
     try {
       var raw = localStorage.getItem(AUTO_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
+  }
+
+  /** 旧形式（単品 state）の自動保存を読む。移行のためだけに使う。 */
+  function loadLegacyAuto() {
+    if (!ok) return null;
+    try {
+      var raw = localStorage.getItem(LEGACY_AUTO_KEY);
       return raw ? JSON.parse(raw) : null;
     } catch (e) { return null; }
   }
@@ -95,6 +105,7 @@ var POPStorage = (function () {
     available: ok,
     saveAuto: saveAuto,
     loadAuto: loadAuto,
+    loadLegacyAuto: loadLegacyAuto,
     clearAuto: clearAuto,
     listPresets: listPresets,
     savePreset: savePreset,

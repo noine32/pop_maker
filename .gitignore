@@ -1,3 +1,6 @@
 .DS_Store
 Thumbs.db
 node_modules/
+
+# Sakana Fugu レビューの中間生成物
+*.fugu-review.md

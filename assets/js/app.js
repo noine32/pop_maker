@@ -5,7 +5,52 @@
   'use strict';
 
   /* ---------- 状態 ---------- */
-  var state = POPPresets.sampleState();
+  /* ドキュメント（カード集）と、選択中カードへの参照。
+     state を参照のまま残すことで、既存の編集パネル・イベント配線が
+     そのまま「選択中のカード」に効く。 */
+  var doc = POPDoc.sampleDoc();
+  var state = POPDoc.activeCard(doc);
+  var autosaveWarned = false;
+
+  function cardSizeMm() { return POPPresets.cardSize(doc.card); }
+
+  /** カードごとの画像アセット（今読み込めているぶんだけ） */
+  function assetsByCard() { return POPImageTool.assetsForCards(doc.cards); }
+
+  function selectCard(index) {
+    doc.activeIndex = Math.max(0, Math.min(index, doc.cards.length - 1));
+    state = POPDoc.activeCard(doc);
+    refreshAll(true);
+  }
+
+  /* 読み込んだ1カード分のデザインを選択中カードへ適用する（プリセット読込用）。
+     改修前に保存されたプリセットは用紙(paper)を持ち、その用紙前提の pt で
+     保存されている。そのまま 44×67mm のカードへ乗せると文字が巨大になり
+     自動縮小で潰れるため、保存当時の寸法から現在のカードサイズへ比例させる。
+     paper を持たない＝改修後に保存されたものは、既にカード基準なので触らない。 */
+  function applyCardState(cardState) {
+    var base = POPPresets.defaultCardState();
+    POPDoc.mergeDeep(base, cardState);
+    var legacyPaper = cardState && cardState.paper;
+    delete base.paper;
+    if (legacyPaper) {
+      var from = POPPresets.paperSize({ paper: legacyPaper });
+      var size = cardSizeMm();
+      POPPresets.scaleCard(base, POPPresets.scaleFor(from.w, from.h, size.w, size.h), size);
+    }
+    doc.cards[doc.activeIndex] = base;
+    state = POPDoc.activeCard(doc);
+    POPImageTool.clamp();
+    refreshAll();
+  }
+
+  /* 画面全体を現在の doc に合わせ直す */
+  function refreshAll(immediate) {
+    syncUI();
+    requestRender();
+    if (immediate) POPCardsUI.refreshNow();
+    else POPCardsUI.refresh();
+  }
 
   var canvas = document.getElementById('canvas');
   var ctx = canvas.getContext('2d');
@@ -32,30 +77,6 @@
       cur = cur[keys[i]];
     }
     cur[keys[keys.length - 1]] = value;
-  }
-
-  /* 既定値に読み込んだデータを重ねる（項目が欠けていても壊れないように）。
-     不正な JSON（セクションが null / 型違いのスカラー）でも既定オブジェクトを
-     壊さない＝以後の描画クラッシュ・操作不能を防ぐ。 */
-  function mergeDeep(base, patch) {
-    if (!patch || typeof patch !== 'object') return base;
-    Object.keys(patch).forEach(function (k) {
-      /* プロトタイプ汚染対策：JSON.parse は __proto__ を列挙可能キーとして作るため、
-         base["__proto__"](=Object.prototype)への書き込みを防ぐ。 */
-      if (k === '__proto__' || k === 'constructor' || k === 'prototype') return;
-      var v = patch[k];
-      var baseIsObj = base[k] && typeof base[k] === 'object' && !Array.isArray(base[k]);
-      var vIsObj = v && typeof v === 'object' && !Array.isArray(v);
-      if (vIsObj && baseIsObj) {
-        mergeDeep(base[k], v);
-      } else if (baseIsObj) {
-        /* 既定がオブジェクトの枠は null・スカラーで上書きしない（既定を維持） */
-        return;
-      } else if (v !== undefined && v !== null) {
-        base[k] = v;
-      }
-    });
-    return base;
   }
 
   /* ---------- 文字設定パネルの生成 ---------- */
@@ -162,6 +183,13 @@
     }).join('');
   }
 
+  function buildCardOptions() {
+    document.getElementById('card-select').innerHTML =
+      POPPresets.CARD_SIZES.map(function (c) {
+        return '<option value="' + c.id + '">' + c.label + '</option>';
+      }).join('');
+  }
+
   function buildTemplates() {
     document.getElementById('template-list').innerHTML = POPPresets.TEMPLATES.map(function (t) {
       return '<button type="button" class="template" data-template="' + t.id + '">' +
@@ -207,7 +235,21 @@
       outs[j].textContent = (typeof val === 'number') ? String(Math.round(val * 100) / 100) : String(val || '');
     }
 
-    document.getElementById('custom-size').hidden = state.paper.id !== 'custom';
+    /* カード/シートの設定は doc 側にあるので data-doc-path で別に同期する */
+    var docInputs = document.querySelectorAll('[data-doc-path]');
+    for (var d = 0; d < docInputs.length; d++) {
+      var de = docInputs[d];
+      if (de === document.activeElement &&
+          (de.type === 'text' || de.type === 'number')) continue;
+      var dv = getPath(doc, de.getAttribute('data-doc-path'));
+      if (de.type === 'checkbox') de.checked = !!dv;
+      else de.value = (dv === undefined || dv === null) ? '' : dv;
+    }
+
+    var cardCustom = document.getElementById('card-custom-size');
+    if (cardCustom) cardCustom.hidden = doc.card.id !== 'custom';
+    var sheetCustom = document.getElementById('custom-size');
+    if (sheetCustom) sheetCustom.hidden = doc.sheet.id !== 'custom';
 
     var imgCtl = document.getElementById('image-controls');
     if (imgCtl) imgCtl.hidden = !(state.image && state.image.src);
@@ -218,30 +260,14 @@
     }
   }
 
-  /* ---------- 画像（読み込みキャッシュ・フォントと同じ遅延ロード方式） ---------- */
-  var imgCache = {};
-  var imgLoading = {};
-  var autosaveWarned = false;
-
-  function ensureImage(src, cb) {
-    if (!src) { if (cb) cb(null); return; }
-    if (imgCache[src]) { if (cb) cb(imgCache[src]); return; }
-    if (imgLoading[src]) return;      /* 二重ロード防止（onload 完了時に再描画される） */
-    imgLoading[src] = true;
-    var im = new Image();
-    im.onload = function () { imgCache[src] = im; delete imgLoading[src]; if (cb) cb(im); };
-    im.onerror = function () { delete imgLoading[src]; if (cb) cb(null); };
-    im.src = src;
-  }
-
-  /* 書き出し用：画像が読み込めてから assets を渡す */
-  function withAssets(cb) {
-    var src = state.image && state.image.src;
-    if (!src) { cb({ image: null }); return; }
-    ensureImage(src, function (img) { cb({ image: img }); });
-  }
-
   /* ---------- 描画 ---------- */
+  /* カードサイズの変更前の値。比例スケールの係数を出すために保持する。 */
+  var lastCardSize = null;
+
+  /* プレビューの表示モードとページ */
+  var previewMode = 'card';   /* 'card' | 'sheet' */
+  var pageIndex = 0;
+
   var rafId = null;
   var ensured = {};
 
@@ -254,7 +280,7 @@
   }
 
   function render() {
-    var size = POPPresets.paperSize(state);
+    var size = previewMode === 'sheet' ? POPPresets.sheetSize(doc.sheet) : cardSizeMm();
     var stageW = Math.max(120, stage.clientWidth - 44);
     var maxH = Math.max(260, window.innerHeight - 230);
     var dispW = Math.min(stageW, maxH * (size.w / size.h), 660);
@@ -267,44 +293,108 @@
     canvas.height = Math.round(dispH * dpr);
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    var assets = { image: (state.image && state.image.src) ? (imgCache[state.image.src] || null) : null };
-    var result = POPRenderer.draw(ctx, state, canvas.width / size.w, assets);
-    drawImageHandles(size);   /* 画像の選択枠＋四隅ハンドル（プレビューのみ・書き出しには出ない） */
+    var pxPerMm = canvas.width / size.w;
+    var result = { fontScale: 1, overflow: false };
 
-    var paper = POPPresets.papersById[state.paper.id];
-    metaEl.textContent = (paper ? paper.label.replace(/（.*/, '') : '') +
-      ' / ' + size.w + '×' + size.h + 'mm / ' +
-      (state.paper.orientation === 'landscape' ? '横' : '縦');
+    if (previewMode === 'sheet') {
+      clampPageIndex();
+      POPSheetView.drawSheet(ctx, doc, pageIndex, pxPerMm, assetsByCard(),
+                             { highlightIndex: doc.activeIndex });
+    } else {
+      result = POPRenderer.draw(ctx, state, pxPerMm, POPImageTool.assetsFor(state), size);
+      POPImageTool.drawHandles();   /* 画像の選択枠＋四隅ハンドル（プレビューのみ） */
+    }
 
-    /* スクリーンリーダー向けに現在の内容を要約 */
-    canvas.setAttribute('aria-label',
-      '商品ポップのプレビュー：商品名「' + (String(state.name.text || '').trim() || '未入力') +
-      '」／価格 ' + (String(state.price.value || '').trim() || '未入力'));
-
-    if (result.overflow) setStatus('内容が用紙に収まりきりません。文字サイズを下げてください。');
-    else if (result.fontScale < 0.999) setStatus('自動縮小中（' + Math.round(result.fontScale * 100) + '%）');
-    else setStatus('');
-
-    ensureImageThenRerender();
+    updateMeta(result);
+    ensureImagesThenRerender();
     ensureFontsThenRerender();
 
-    var saved = POPStorage.saveAuto(state);
-    if (!saved && state.image && state.image.src && !autosaveWarned) {
-      autosaveWarned = true;
-      setStatus('画像が大きく自動保存できません。「データ保存」で書き出せます', true);
+    scheduleSave();
+  }
+
+  /* 画像が未ロードなら読み込んでから描き直す。
+     カードタブは選択中カードだけ、シートタブは「そのページに載る全カード」を対象にする。
+     シートタブで選択中カードしか見ないと、一度も選択していないカードの画像が
+     永久に読み込まれず、面付けプレビューで絵が出ないままになる。
+     読み込み済みを弾くガードは必須（POPImageTool.ensure はキャッシュヒット時に
+     コールバックを同期で呼ぶため、無条件に再描画を要求すると毎フレーム回り続ける）。 */
+  function ensureImagesThenRerender() {
+    var targets;
+    if (previewMode === 'sheet') {
+      targets = POPSheetView.cardIndexesOnPage(doc, pageIndex).map(function (i) {
+        return doc.cards[i];
+      });
+    } else {
+      targets = [state];
     }
+    targets.forEach(function (c) {
+      var src = c && c.image && c.image.src;
+      if (!src || POPImageTool.isSettled(src)) return;
+      POPImageTool.ensure(src, function () { refreshAll(); });
+    });
   }
 
-  /* 画像が未ロードなら読み込んでから描き直す */
-  function ensureImageThenRerender() {
-    var src = state.image && state.image.src;
-    if (!src || imgCache[src]) return;
-    ensureImage(src, function () { requestRender(); });
+  function clampPageIndex() {
+    var pages = POPSheetView.pagesOf(doc);
+    pageIndex = Math.max(0, Math.min(pageIndex, Math.max(0, pages - 1)));
   }
 
-  /* 使用中のWebフォントが未読み込みなら読み込んでから描き直す */
+  /* メタ表示・警告・ページ送り・読み上げ用ラベルをまとめて更新する */
+  function updateMeta(result) {
+    var card = cardSizeMm();
+    var sheet = POPPresets.sheetSize(doc.sheet);
+    var L = POPSheetView.layoutOf(doc);
+    var pages = POPSheetView.pagesOf(doc);
+
+    metaEl.textContent =
+      'カード ' + card.w + '×' + card.h + 'mm / ' +
+      (L.perPage > 0
+        ? sheet.w + '×' + sheet.h + 'mm に ' + L.perPage + '枚' +
+          (L.rotate ? '（90°回転）' : '')
+        : '配置できません') +
+      ' / カード' + doc.cards.length + '枚・全' + pages + 'ページ';
+
+    var pager = document.getElementById('preview-pager');
+    pager.hidden = !(previewMode === 'sheet' && pages > 1);
+    document.getElementById('page-label').textContent = (pageIndex + 1) + ' / ' + Math.max(1, pages);
+    document.getElementById('btn-page-prev').disabled = pageIndex <= 0;
+    document.getElementById('btn-page-next').disabled = pageIndex >= pages - 1;
+
+    canvas.setAttribute('aria-label', previewMode === 'sheet'
+      ? 'シートのプレビュー：' + doc.cards.length + '枚のカードを' + pages + 'ページに面付け'
+      : '商品ポップのプレビュー：商品名「' +
+        (String(state.name.text || '').trim() || '未入力') +
+        '」／価格 ' + (String(state.price.value || '').trim() || '未入力'));
+
+    /* 警告は「配置できない」→「余白0mm」の順に強い方を出す */
+    if (L.perPage === 0) {
+      setStatus('カードがシートより大きいため配置できません。カードを小さくするか用紙を大きくしてください');
+    } else if (Number(doc.sheet.margin) === 0) {
+      setStatus('余白0mmです。フチなし印刷に対応したプリンタ以外では端のカードが欠けます');
+    } else if (previewMode === 'card' && result.overflow) {
+      setStatus('内容がカードに収まりきりません。文字サイズを下げてください');
+    } else if (previewMode === 'card' && result.fontScale < 0.999) {
+      setStatus('自動縮小中（' + Math.round(result.fontScale * 100) + '%）');
+    } else if (!statusSticky) {
+      setStatus('');
+    }
+
+    var printable = L.perPage > 0;
+    document.getElementById('btn-print').disabled = !printable;
+  }
+
+  /* 使用中のWebフォントが未読み込みなら読み込んでから描き直す。
+     シートタブではそのページに載る全カードぶんを集める。選択中カードだけ見ると、
+     一度も選んでいないカードが代替書体のまま描かれ、プレビューと印刷結果が食い違うため。 */
   function ensureFontsThenRerender() {
-    var specs = POPRenderer.usedFonts(state);
+    var specs = [];
+    if (previewMode === 'sheet') {
+      POPSheetView.cardIndexesOnPage(doc, pageIndex).forEach(function (i) {
+        POPRenderer.usedFonts(doc.cards[i]).forEach(function (s) { specs.push(s); });
+      });
+    } else {
+      specs = POPRenderer.usedFonts(state);
+    }
     var pending = specs.filter(function (s) {
       var f = POPFonts.byId[s.font];
       if (!f || !f.web) return false;
@@ -312,298 +402,81 @@
     });
     if (!pending.length) return;
     pending.forEach(function (s) { ensured[s.font + '|' + s.weight] = true; });
-    POPFonts.ensureAll(pending).then(function () { requestRender(); });
+    POPFonts.ensureAll(pending).then(function () { refreshAll(); });
+  }
+
+  /* 自動保存の予約。カードが増えると doc の JSON 化が重くなるため、
+     毎フレーム保存せず 500ms にまとめる。 */
+  var saveTimer = null;
+
+  function scheduleSave() {
+    if (saveTimer) return;
+    saveTimer = setTimeout(function () {
+      saveTimer = null;
+      var saved = POPStorage.saveAuto(doc);
+      if (!saved && !autosaveWarned) {
+        autosaveWarned = true;
+        var imgCount = doc.cards.filter(function (c) { return c.image && c.image.src; }).length;
+        setStatus('カード' + doc.cards.length + '枚・画像' + imgCount +
+                  '点のため自動保存できません。「データ保存」で書き出せます', true);
+      }
+    }, 500);
   }
 
   var statusTimer = null;
+  var statusSticky = false;   /* 一時メッセージの表示中。描画のたびに消さないための印 */
+
   function setStatus(msg, temporary) {
     statusEl.textContent = msg;
     if (statusTimer) { clearTimeout(statusTimer); statusTimer = null; }
-    if (msg && temporary) statusTimer = setTimeout(function () { statusEl.textContent = ''; }, 2500);
+    statusSticky = !!(msg && temporary);
+    if (statusSticky) {
+      statusTimer = setTimeout(function () {
+        statusTimer = null;
+        statusSticky = false;
+        statusEl.textContent = '';
+      }, 2500);
+    }
   }
 
-  /* ---------- テンプレート適用 ---------- */
+  /* ---------- テンプレート適用 ----------
+     テンプレの数値は A4(210×297) 前提。カードサイズへ焼き込んでから重ねる。 */
   function applyTemplate(id) {
     var t = POPPresets.templatesById[id];
     if (!t) return;
+    var size = cardSizeMm();
+    var patch = JSON.parse(JSON.stringify(t.apply));
+    POPPresets.scaleCard(patch, POPPresets.scaleFor(210, 297, size.w, size.h), size);
     state.template = id;
-    mergeDeep(state, JSON.parse(JSON.stringify(t.apply)));
-    syncUI();
-    requestRender();
+    POPDoc.mergeDeep(state, patch);
+    refreshAll(true);
   }
 
-  /* ---------- 出力 ---------- */
-  function safeFileName() {
-    var base = String(state.name.text || 'pop').replace(/[\\/:*?"<>|\s\n]+/g, '_').slice(0, 40);
-    return (base || 'pop');
-  }
+  /* カードの大きさが変わったら、全カードの文字・余白を比例させる。
+     基準サイズからの目標倍率で管理し、適用済みとの差分だけを掛けるので、
+     大きさを行き来しても文字は元に戻る（縮みっぱなしにならない）。
+     縦横が入れ替わっただけのときは scaleFor が 1 を返すので縮まない（設計 §4.1）。 */
+  function applyCardSizeChange() {
+    var next = cardSizeMm();
+    if (!lastCardSize) { lastCardSize = next; return; }
+    if (next.w === lastCardSize.w && next.h === lastCardSize.h) return;
 
-  function exportPng() {
-    var dpi = Number(document.getElementById('export-dpi').value) || 300;
-    setStatus('画像を作成中…');
-    /* 描画前にフォント・画像の読み込みを待つ */
-    POPFonts.ensureAll(POPRenderer.usedFonts(state)).then(function () {
-     withAssets(function (assets) {
-      var cv = POPRenderer.renderToCanvas(state, dpi, assets);
-      var done = function (blob) {
-        POPStorage.download(blob, safeFileName() + '_' + dpi + 'dpi.png');
-        setStatus('PNGを保存しました', true);
-      };
-      var fail = function () {
-        setStatus('画像を作成できませんでした。解像度を下げるか用紙を小さくしてお試しください', true);
-      };
-      /* dataURL 経由の書き出し（toBlob 非対応 or null 時のフォールバック） */
-      var viaDataUrl = function () {
-        try {
-          var data = cv.toDataURL('image/png').split(',')[1];
-          if (!data) { fail(); return; }
-          var bin = atob(data), arr = new Uint8Array(bin.length);
-          for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-          done(new Blob([arr], { type: 'image/png' }));
-        } catch (e) { fail(); }
-      };
-      if (cv.toBlob) {
-        /* 大きい用紙×高dpi では canvas 面積上限で b が null になり得る＝
-           握り潰さず dataURL にフォールバックし、それも駄目なら失敗を通知する */
-        cv.toBlob(function (b) { if (b) done(b); else viaDataUrl(); }, 'image/png');
-      } else {
-        viaDataUrl();
+    if (document.getElementById('scale-with-card').checked) {
+      var step = POPPresets.scaleStep(doc.scale, next.w, next.h);
+      if (Math.abs(step.delta - 1) > 1e-9) {
+        doc.cards.forEach(function (c) { POPPresets.scaleCard(c, step.delta, next); });
+        setStatus('カードの大きさに合わせて文字と余白を調整しました', true);
       }
-     });
-    });
-  }
-
-  function printPop() {
-    setStatus('印刷を準備中…');
-    POPFonts.ensureAll(POPRenderer.usedFonts(state)).then(function () {
-     withAssets(function (assets) {
-      var size = POPPresets.paperSize(state);
-      var url = POPRenderer.renderToCanvas(state, 300, assets).toDataURL('image/png');
-
-      var frame = document.createElement('iframe');
-      frame.setAttribute('aria-hidden', 'true');
-      frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
-      document.body.appendChild(frame);
-
-      var doc = frame.contentWindow.document;
-      doc.open();
-      doc.write(
-        '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + safeFileName() + '</title><style>' +
-        '@page{size:' + size.w + 'mm ' + size.h + 'mm;margin:0}' +
-        'html,body{margin:0;padding:0}' +
-        'img{width:' + size.w + 'mm;height:' + size.h + 'mm;display:block}' +
-        '</style></head><body><img id="pop" alt=""></body></html>'
-      );
-      doc.close();
-
-      var img = doc.getElementById('pop');
-      var go = function () {
-        try {
-          frame.contentWindow.focus();
-          frame.contentWindow.print();
-          setStatus('印刷ダイアログを開きました', true);
-        } catch (e) {
-          setStatus('印刷を開始できませんでした', true);
-        }
-        setTimeout(function () {
-          if (frame.parentNode) frame.parentNode.removeChild(frame);
-        }, 1500);
-      };
-      img.onload = go;
-      img.onerror = go;
-      img.src = url;
-     });
-    });
-  }
-
-  /* ---------- 画像の配置・操作（プレビュー上でドラッグ移動／四隅リサイズ） ---------- */
-  /* 現在の状態から画像の矩形（プレビュー canvas のバッキングpx）を得る */
-  function imgRectPx(size) {
-    var im = state.image;
-    var s = canvas.width / size.w;                 /* バッキングpx / mm */
-    var w = im.wMm * s;
-    var h = (im.wMm / (im.aspect || 1)) * s;
-    return { x: (im.xMm || 0) * s, y: (im.yMm || 0) * s, w: w, h: h, s: s };
-  }
-
-  /* 選択枠＋四隅ハンドルをプレビューに重ね描き（書き出しには出さない） */
-  function drawImageHandles(size) {
-    var im = state.image;
-    if (!im || !im.src || !(im.wMm > 0)) return;
-    var r = imgRectPx(size);
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.strokeStyle = '#2b6cb0';
-    ctx.lineWidth = Math.max(1, r.s * 0.4);
-    ctx.setLineDash([r.s * 1.6, r.s * 1.2]);
-    ctx.strokeRect(r.x, r.y, r.w, r.h);
-    ctx.setLineDash([]);
-    var hs = Math.max(7, r.s * 3);                  /* ハンドル一辺（バッキングpx） */
-    [[r.x, r.y], [r.x + r.w, r.y], [r.x, r.y + r.h], [r.x + r.w, r.y + r.h]].forEach(function (c) {
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.rect(c[0] - hs / 2, c[1] - hs / 2, hs, hs);
-      ctx.fill();
-      ctx.stroke();
-    });
-    ctx.restore();
-  }
-
-  /* ポインタ座標 → mm（用紙左上基準） */
-  function eventToMm(ev) {
-    var rect = canvas.getBoundingClientRect();
-    var size = POPPresets.paperSize(state);
-    return {
-      x: (ev.clientX - rect.left) / rect.width * size.w,
-      y: (ev.clientY - rect.top) / rect.height * size.h
-    };
-  }
-
-  /* mm 座標が画像のどこに当たるか（四隅ハンドル / 内部 / 外） */
-  function imageHitTest(mm) {
-    var im = state.image;
-    if (!im || !im.src || !(im.wMm > 0)) return null;
-    var hMm = im.wMm / (im.aspect || 1);
-    var size = POPPresets.paperSize(state);
-    var tol = Math.max(size.w, size.h) * 0.035 + 2;     /* 指でも掴める余裕 */
-    var corners = {
-      tl: [im.xMm, im.yMm], tr: [im.xMm + im.wMm, im.yMm],
-      bl: [im.xMm, im.yMm + hMm], br: [im.xMm + im.wMm, im.yMm + hMm]
-    };
-    for (var key in corners) {
-      if (Math.abs(mm.x - corners[key][0]) < tol && Math.abs(mm.y - corners[key][1]) < tol) {
-        return { type: 'corner', corner: key };
-      }
-    }
-    if (mm.x >= im.xMm && mm.x <= im.xMm + im.wMm && mm.y >= im.yMm && mm.y <= im.yMm + hMm) {
-      return { type: 'inside' };
-    }
-    return null;
-  }
-
-  var imgDrag = null;
-
-  function onImagePointerDown(ev) {
-    var mm = eventToMm(ev);
-    var hit = imageHitTest(mm);
-    if (!hit) return;
-    ev.preventDefault();
-    try { canvas.setPointerCapture(ev.pointerId); } catch (e) { /* noop */ }
-    var im = state.image;
-    if (hit.type === 'corner') {
-      var hMm = im.wMm / (im.aspect || 1);
-      var left = hit.corner.indexOf('l') >= 0, top = hit.corner.indexOf('t') >= 0;
-      /* 反対側の角を固定点（anchor）にしてアスペクト維持リサイズ */
-      imgDrag = { mode: 'resize', left: left, top: top,
-                  anchor: { x: left ? im.xMm + im.wMm : im.xMm, y: top ? im.yMm + hMm : im.yMm } };
+      doc.scale.applied = step.target;
     } else {
-      imgDrag = { mode: 'move', dx: mm.x - im.xMm, dy: mm.y - im.yMm };
+      /* 比例させない指定のときは doc.scale を書き換えない。
+         値を変えていないのに基準だけ置き直すと、チェックを戻して元のサイズへ
+         戻したときに倍率が 1 にならず、文字が元より大きくなってしまうため
+         （実測: 44×67 → OFFで30×50 → ONで44×67 に戻すと 64pt が 85.8pt になった）。
+         基準は最後に比例させた時点のものを持ち越す。 */
+      doc.cards.forEach(function (c) { POPPresets.clampImage(c.image, next); });
     }
-  }
-
-  /* 画像を用紙外へ逃がしすぎないようクランプ（掴めなくなるのを防ぐ）。
-     ブリード（端の外へ少しはみ出す）は許容しつつ、各辺に最低 keep mm は
-     用紙内へ残す。幅はUIスライダーと同じ 10〜600mm に収める。 */
-  function clampImage() {
-    var im = state.image;
-    if (!im || !im.src) return;
-    var size = POPPresets.paperSize(state);
-    im.wMm = Math.max(10, Math.min(600, Number(im.wMm) || 10));
-    var hMm = im.wMm / (im.aspect || 1);
-    var keep = Math.min(20, im.wMm, hMm);
-    im.xMm = Math.max(keep - im.wMm, Math.min(size.w - keep, im.xMm));
-    im.yMm = Math.max(keep - hMm, Math.min(size.h - keep, im.yMm));
-  }
-
-  function onImagePointerMove(ev) {
-    if (!imgDrag) { updateImageCursor(ev); return; }
-    ev.preventDefault();
-    var im = state.image, mm = eventToMm(ev);
-    if (imgDrag.mode === 'move') {
-      im.xMm = mm.x - imgDrag.dx;
-      im.yMm = mm.y - imgDrag.dy;
-    } else {
-      var dxMm = Math.abs(mm.x - imgDrag.anchor.x);
-      var dyMm = Math.abs(mm.y - imgDrag.anchor.y);
-      var newW = Math.max(10, Math.min(600, Math.max(dxMm, dyMm * (im.aspect || 1))));
-      var newH = newW / (im.aspect || 1);
-      im.wMm = newW;
-      im.xMm = imgDrag.left ? imgDrag.anchor.x - newW : imgDrag.anchor.x;
-      im.yMm = imgDrag.top ? imgDrag.anchor.y - newH : imgDrag.anchor.y;
-    }
-    clampImage();
-    syncUI();
-    requestRender();
-  }
-
-  function endImageDrag(ev) {
-    if (!imgDrag) return;
-    imgDrag = null;
-    try { canvas.releasePointerCapture(ev.pointerId); } catch (e) { /* noop */ }
-    requestRender();
-  }
-
-  function updateImageCursor(ev) {
-    var hit = imageHitTest(eventToMm(ev));
-    canvas.style.cursor = !hit ? 'default'
-      : (hit.type === 'corner'
-          ? (hit.corner === 'tl' || hit.corner === 'br' ? 'nwse-resize' : 'nesw-resize')
-          : 'move');
-  }
-
-  /* 画像ファイルを取り込む（長辺2000pxに縮小して保存容量を抑える） */
-  function importImageFile(file) {
-    if (!file) return;
-    var reader = new FileReader();
-    reader.onload = function () {
-      var im = new Image();
-      im.onload = function () {
-        var maxSide = 2000;
-        var sc = Math.min(1, maxSide / Math.max(im.naturalWidth, im.naturalHeight));
-        var cw = Math.max(1, Math.round(im.naturalWidth * sc));
-        var ch = Math.max(1, Math.round(im.naturalHeight * sc));
-        var c = document.createElement('canvas');
-        c.width = cw; c.height = ch;
-        c.getContext('2d').drawImage(im, 0, 0, cw, ch);
-        var isPng = /image\/png/i.test(file.type || '');
-        var dataUrl;
-        try { dataUrl = isPng ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', 0.9); }
-        catch (e) { setStatus('画像を読み込めませんでした', true); return; }
-        var aspect = cw / ch;
-        var size = POPPresets.paperSize(state);
-        var wMm = Math.round(size.w * 0.6);
-        state.image = {
-          src: dataUrl, aspect: aspect, wMm: wMm,
-          xMm: Math.round((size.w - wMm) / 2),
-          yMm: Math.round((size.h - wMm / aspect) / 2),
-          opacity: 1, layer: 'back'
-        };
-        autosaveWarned = false;
-        ensureImage(dataUrl, function () { syncUI(); requestRender(); });
-        setStatus('画像を追加しました', true);
-      };
-      im.onerror = function () { setStatus('画像を読み込めませんでした', true); };
-      im.src = String(reader.result);
-    };
-    reader.onerror = function () { setStatus('ファイルを読めませんでした', true); };
-    reader.readAsDataURL(file);
-  }
-
-  /* ---------- 保存済みデザイン ---------- */
-  function renderPresetList() {
-    var ul = document.getElementById('preset-list');
-    var arr = POPStorage.listPresets();
-    if (!arr.length) {
-      ul.innerHTML = '<li class="presets__empty">保存されたデザインはありません</li>';
-      return;
-    }
-    ul.innerHTML = arr.map(function (p) {
-      var n = String(p.name).replace(/&/g, '&amp;').replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-      return '<li><span title="' + n + '">' + n + '</span>' +
-        '<button type="button" class="btn btn--sm" data-preset-load="' + n + '">読込</button>' +
-        '<button type="button" class="btn btn--sm btn--ghost" data-preset-del="' + n + '">削除</button></li>';
-    }).join('');
+    lastCardSize = next;
   }
 
   /* ---------- イベント ---------- */
@@ -615,12 +488,46 @@
     function onFieldChange(ev) {
       var el = ev.target;
       if (!el || !el.getAttribute) return;
+
+      var docPath = el.getAttribute('data-doc-path');
+      if (docPath) {
+        /* 数値入力は「入力中」に丸めも比例スケールも走らせない。
+           「150」と打つ途中の「1」が最小値へ丸められ、その値を基準に
+           カードが切り詰められて全カードの文字が縮み、続けて打っても
+           scaleFor が 1 を返すため元に戻らなくなるため
+           （利用者の「文字を勝手に縮めるな」に反する）。
+           確定（change）を待って、そこで一度だけ整える。 */
+        if (ev.type === 'input' && (el.type === 'number' || el.type === 'range')) {
+          if (el.value === '') return;              /* 空欄は未確定として無視する */
+          setPath(doc, docPath, parseValue(el));
+          refreshAll();
+          return;
+        }
+        setPath(doc, docPath, parseValue(el));
+        onDocChange(docPath);
+        return;
+      }
+
       var path = el.getAttribute('data-path');
       if (!path) return;
       setPath(state, path, parseValue(el));
-      if (path.indexOf('image.') === 0) clampImage();   /* 幅・X・Y の直接入力もクランプ */
-      syncUI();
-      requestRender();
+      if (path.indexOf('image.') === 0) POPImageTool.clamp();  /* 幅・X・Y の直接入力もクランプ */
+      refreshAll();
+    }
+
+    /* カード/シート設定が変わったときの後処理 */
+    function onDocChange(docPath) {
+      doc.sheet.margin = Math.max(0, Math.min(30, Number(doc.sheet.margin) || 0));
+      doc.sheet.gap = Math.max(0, Math.min(20, Number(doc.sheet.gap) || 0));
+
+      /* カスタムカードはシート内寸へ丸める。プリセットは丸めず警告だけ（設計 §4）。 */
+      if (doc.card.id === 'custom') {
+        var c = POPPresets.clampCustomCard(doc.card, doc.sheet);
+        doc.card.customW = c.customW;
+        doc.card.customH = c.customH;
+      }
+      applyCardSizeChange();
+      refreshAll(true);
     }
 
     /* タブ切り替え（クリック＋キーボード：←→ Home End） */
@@ -647,6 +554,16 @@
     document.getElementById('template-list').addEventListener('click', function (ev) {
       var btn = ev.target.closest('[data-template]');
       if (btn) applyTemplate(btn.getAttribute('data-template'));
+    });
+
+    document.getElementById('btn-apply-design').addEventListener('click', function () {
+      var n = doc.cards.length - 1;
+      if (n <= 0) { setStatus('カードが1枚のため適用先がありません', true); return; }
+      if (!window.confirm(n + '枚のカードのデザインを上書きします。よろしいですか？\n' +
+                          '（商品名・価格・説明・画像は変わりません）')) return;
+      var applied = POPDoc.applyDesignToAll(doc, doc.activeIndex);
+      refreshAll(true);
+      setStatus(applied + '枚のカードにデザインを適用しました', true);
     });
 
     /* フォントの一括適用・全体サイズ調整 */
@@ -677,30 +594,17 @@
     });
     document.getElementById('file-image').addEventListener('change', function (ev) {
       var file = ev.target.files && ev.target.files[0];
-      importImageFile(file);
+      autosaveWarned = false;
+      POPImageTool.importFile(file);
       ev.target.value = '';
     });
     document.getElementById('btn-image-del').addEventListener('click', function () {
-      state.image = POPPresets.defaultState().image;
       autosaveWarned = false;
-      canvas.style.cursor = 'default';
-      syncUI();
-      requestRender();
-      setStatus('画像を削除しました', true);
+      POPImageTool.clear();
     });
 
-    /* 画像：プレビュー上でドラッグ移動／四隅リサイズ（マウス・タッチ共通） */
-    canvas.addEventListener('pointerdown', onImagePointerDown);
-    canvas.addEventListener('pointermove', onImagePointerMove);
-    canvas.addEventListener('pointerup', endImageDrag);
-    canvas.addEventListener('pointercancel', endImageDrag);
-
-    /* 書き出し */
-    document.getElementById('btn-png').addEventListener('click', exportPng);
-    document.getElementById('btn-print').addEventListener('click', printPop);
-
     document.getElementById('btn-save-json').addEventListener('click', function () {
-      POPStorage.exportJson(state, safeFileName() + '.json');
+      POPStorage.exportJson(doc, POPExport.safeFileName() + '.json');
       setStatus('データを保存しました', true);
     });
 
@@ -712,9 +616,13 @@
       var file = ev.target.files && ev.target.files[0];
       if (!file) return;
       POPStorage.readJsonFile(file).then(function (data) {
-        state = mergeDeep(POPPresets.defaultState(), data);
-        syncUI();
-        requestRender();
+        var loaded = POPDoc.migrate(data);
+        if (!loaded) { setStatus('読み込めるデータではありません', true); return; }
+        doc = loaded;
+        state = POPDoc.activeCard(doc);
+        lastCardSize = cardSizeMm();
+        autosaveWarned = false;
+        refreshAll(true);
         setStatus('データを読み込みました', true);
       }).catch(function (e) {
         setStatus(e.message, true);
@@ -724,41 +632,13 @@
 
     document.getElementById('btn-reset').addEventListener('click', function () {
       if (!confirm('入力内容をすべて初期状態に戻します。よろしいですか？')) return;
-      state = POPPresets.sampleState();
+      doc = POPDoc.defaultDoc();
+      state = POPDoc.activeCard(doc);
+      lastCardSize = cardSizeMm();
       POPStorage.clearAuto();
-      syncUI();
-      requestRender();
+      autosaveWarned = false;
+      refreshAll(true);
       setStatus('リセットしました', true);
-    });
-
-    /* 名前を付けて保存 */
-    document.getElementById('btn-preset-save').addEventListener('click', function () {
-      var input = document.getElementById('preset-name');
-      /* 改行・連続空白を1つに正規化（HTML属性値の空白正規化で読込/削除がズレるのを防ぐ） */
-      var fallback = String(state.name.text || '').replace(/\s+/g, ' ').trim().slice(0, 20);
-      var name = input.value.replace(/\s+/g, ' ').trim() || fallback || '無題';
-      POPStorage.savePreset(name, JSON.parse(JSON.stringify(state)));
-      input.value = '';
-      renderPresetList();
-      setStatus('「' + name + '」を保存しました', true);
-    });
-
-    document.getElementById('preset-list').addEventListener('click', function (ev) {
-      var loadBtn = ev.target.closest('[data-preset-load]');
-      var delBtn = ev.target.closest('[data-preset-del]');
-      if (loadBtn) {
-        var name = loadBtn.getAttribute('data-preset-load');
-        var found = POPStorage.listPresets().filter(function (p) { return p.name === name; })[0];
-        if (found) {
-          state = mergeDeep(POPPresets.defaultState(), found.state);
-          syncUI();
-          requestRender();
-          setStatus('「' + name + '」を読み込みました', true);
-        }
-      } else if (delBtn) {
-        POPStorage.deletePreset(delBtn.getAttribute('data-preset-del'));
-        renderPresetList();
-      }
     });
 
     /* リサイズで再描画 */
@@ -768,23 +648,142 @@
       resizeTimer = setTimeout(requestRender, 120);
     });
 
+    /* プレビューのタブ切替 */
+    document.querySelector('.preview-tabs').addEventListener('click', function (ev) {
+      var btn = ev.target.closest ? ev.target.closest('[data-preview]') : null;
+      if (!btn) return;
+      previewMode = btn.getAttribute('data-preview');
+      var tabs = document.querySelectorAll('.ptab');
+      for (var i = 0; i < tabs.length; i++) {
+        var on = tabs[i] === btn;
+        tabs[i].classList.toggle('is-active', on);
+        tabs[i].setAttribute('aria-selected', on ? 'true' : 'false');
+      }
+      /* シート表示中は画像の操作を止める */
+      POPImageTool.setEnabled(previewMode === 'card');
+      requestRender();
+    });
+
+    document.getElementById('btn-page-prev').addEventListener('click', function () {
+      pageIndex = Math.max(0, pageIndex - 1);
+      requestRender();
+    });
+    document.getElementById('btn-page-next').addEventListener('click', function () {
+      pageIndex = Math.min(POPSheetView.pagesOf(doc) - 1, pageIndex + 1);
+      requestRender();
+    });
+
+    /* シート上でカードをクリックすると、そのカードを選択する */
+    canvas.addEventListener('click', function (ev) {
+      if (previewMode !== 'sheet') return;
+      var rect = canvas.getBoundingClientRect();
+      var sheet = POPPresets.sheetSize(doc.sheet);
+      var mm = {
+        x: (ev.clientX - rect.left) / rect.width * sheet.w,
+        y: (ev.clientY - rect.top) / rect.height * sheet.h
+      };
+      var i = POPSheetView.hitTest(doc, pageIndex, mm);
+      if (i >= 0) selectCard(i);
+    });
+
     /* Webフォント読み込み完了で描き直す */
     if (document.fonts && document.fonts.ready) {
-      document.fonts.ready.then(function () { requestRender(); });
+      document.fonts.ready.then(function () { refreshAll(); });
     }
+
+    /* タブを裏に回すと requestAnimationFrame が止まり、保存の予約も走らない。
+       そのまま閉じると直前の編集が失われるので、隠れる/離脱する時点で即保存する。
+       beforeunload はモバイルで発火しないことがあるため pagehide を使う。 */
+    function flushSave() {
+      if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+      POPStorage.saveAuto(doc);
+    }
+    window.addEventListener('pagehide', flushSave);
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'hidden') flushSave();
+    });
   }
 
   /* ---------- 起動 ---------- */
   function init() {
     buildTextPanels();
     buildPaperOptions();
+    buildCardOptions();
     buildTemplates();
 
-    var saved = POPStorage.loadAuto();
-    if (saved) state = mergeDeep(POPPresets.defaultState(), saved);
+    /* ①新形式 → ②旧形式（単品）を移行 → ③サンプル の順に復元する */
+    var restored = POPDoc.migrate(POPStorage.loadAuto());
+    if (!restored) restored = POPDoc.migrate(POPStorage.loadLegacyAuto());
+    doc = restored || POPDoc.sampleDoc();
+    state = POPDoc.activeCard(doc);
+    lastCardSize = cardSizeMm();
+
+    POPImageTool.init({
+      canvas: canvas,
+      ctx: ctx,
+      getCard: function () { return state; },
+      getCardSize: cardSizeMm,
+      onChange: function () { refreshAll(); },
+      setStatus: setStatus
+    });
+    POPPresetUI.init({
+      getCard: function () { return state; },
+      applyCard: applyCardState,
+      setStatus: setStatus
+    });
+
+    POPExport.init({
+      getDoc: function () { return doc; },
+      getCard: function () { return state; },
+      getCardSize: cardSizeMm,
+      getPageIndex: function () { return pageIndex; },
+      setStatus: setStatus
+    });
+
+    POPCardsUI.init({
+      root: document.getElementById('card-list'),
+      getDoc: function () { return doc; },
+      getAssets: assetsByCard,
+      onSelect: selectCard,
+      onAdd: function () {
+        var size = cardSizeMm();
+        var c = POPPresets.defaultCardState();
+        /* defaultCardState は A4 前提の pt を持つのでカードサイズへ合わせる */
+        POPPresets.scaleCard(c, POPPresets.scaleFor(210, 297, size.w, size.h), size);
+        if (POPDoc.addCard(doc, c) < 0) {
+          setStatus('カードは' + POPDoc.MAX_CARDS + '枚までです', true);
+          return;
+        }
+        state = POPDoc.activeCard(doc);
+        refreshAll(true);
+        setStatus('カードを追加しました', true);
+      },
+      onDuplicate: function () {
+        if (POPDoc.duplicateCard(doc, doc.activeIndex) < 0) {
+          setStatus('カードは' + POPDoc.MAX_CARDS + '枚までです', true);
+          return;
+        }
+        state = POPDoc.activeCard(doc);
+        refreshAll(true);
+        setStatus('カードを複製しました', true);
+      },
+      onRemove: function () {
+        if (!POPDoc.removeCard(doc, doc.activeIndex)) {
+          setStatus('最後の1枚は削除できません', true);
+          return;
+        }
+        state = POPDoc.activeCard(doc);
+        refreshAll(true);
+        setStatus('カードを削除しました', true);
+      },
+      onMove: function (from, to) {
+        POPDoc.moveCard(doc, from, to);
+        state = POPDoc.activeCard(doc);
+        refreshAll(true);
+      }
+    });
 
     bindEvents();
-    renderPresetList();
     syncUI();
     requestRender();
 

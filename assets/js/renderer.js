@@ -333,11 +333,12 @@ var POPRenderer = (function () {
      本体
      assets.image に読み込み済み HTMLImageElement を渡すと写真を描画する。
      -------------------------------------------------------- */
-  function draw(ctx, state, pxPerMm, assets) {
+  /* sizeMm はカード1枚の大きさ(mm)。省略時は旧データ(state.paper)から解決する。 */
+  function draw(ctx, state, pxPerMm, assets, sizeMm) {
     assets = assets || {};
     var photo = assets.image || null;
     var imgLayer = (state.image && state.image.layer) || 'back';
-    var size = POPPresets.paperSize(state);
+    var size = sizeMm || (state.paper ? POPPresets.paperSize(state) : { w: 210, h: 297 });
     var W = size.w * pxPerMm;
     var H = size.h * pxPerMm;
 
@@ -445,14 +446,14 @@ var POPRenderer = (function () {
   }
 
   /** 指定解像度でオフスクリーンに描画して canvas を返す（assets.image で写真も描画） */
-  function renderToCanvas(state, dpi, assets) {
+  function renderToCanvas(state, dpi, assets, sizeMm) {
     var pxPerMm = dpi / 25.4;
-    var size = POPPresets.paperSize(state);
+    var size = sizeMm || (state.paper ? POPPresets.paperSize(state) : { w: 210, h: 297 });
     var cv = document.createElement('canvas');
     cv.width = Math.round(size.w * pxPerMm);
     cv.height = Math.round(size.h * pxPerMm);
     var ctx = cv.getContext('2d');
-    draw(ctx, state, pxPerMm, assets);
+    draw(ctx, state, pxPerMm, assets, size);
     return cv;
   }
 

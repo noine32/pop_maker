@@ -66,7 +66,7 @@ html, body {
 /* ---------- レイアウト ---------- */
 .layout {
   display: grid;
-  grid-template-columns: var(--panel-w) 1fr;
+  grid-template-columns: minmax(190px, 230px) var(--panel-w) 1fr;
   align-items: start;
   gap: 0;
   min-height: calc(100vh - var(--bar-h));
@@ -199,6 +199,10 @@ textarea.control { resize: vertical; line-height: 1.5; }
 .grid { display: grid; gap: 10px; }
 .grid--2 { grid-template-columns: 1fr 1fr; }
 .grid--3 { grid-template-columns: repeat(3, 1fr); }
+
+.hint { font-size: 11px; color: #64748b; margin: 4px 0 0; line-height: 1.5; }
+.field-row { display: flex; gap: 8px; }
+.field-row .field { flex: 1; }
 
 .check {
   display: flex;
@@ -387,12 +391,53 @@ textarea.control { resize: vertical; line-height: 1.5; }
     order: 2;
   }
   .preview { order: 1; }
+  .cards {
+    order: 3;
+    min-width: 0;
+    max-width: none;
+    border-bottom: 1px solid var(--line);
+  }
   .appbar__actions { width: 100%; margin-left: 0; }
 }
 
 @media print {
   body { background: #fff; }
-  .appbar, .panel, .preview__bar, .preview__note { display: none !important; }
+  .appbar, .panel, .cards, .preview__bar, .preview__note { display: none !important; }
+  .preview-tabs, .preview-pager { display: none; }
   .preview__stage { border: none; padding: 0; background: none; }
   .preview__canvas { box-shadow: none; }
 }
+
+/* ---------- プレビュータブ ---------- */
+.preview-tabs { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.ptab {
+  border: 1px solid #d8dde3; background: #fff; border-radius: 999px;
+  padding: 4px 14px; font-size: 12px; cursor: pointer; color: #475569;
+}
+.ptab.is-active { background: #2b6cb0; border-color: #2b6cb0; color: #fff; font-weight: 700; }
+.preview-pager { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 12px; }
+
+/* ---------- カード一覧 ---------- */
+.cards { display: flex; flex-direction: column; gap: 8px; min-width: 190px; max-width: 230px; }
+.cards__title { font-size: 13px; font-weight: 700; margin: 0; }
+.cards__list {
+  list-style: none; margin: 0; padding: 4px;
+  overflow-y: auto; max-height: calc(100vh - 260px);
+  border: 1px solid #d8dde3; border-radius: 8px; background: #fff;
+}
+.cards__list:focus-visible { outline: 2px solid #2b6cb0; outline-offset: 1px; }
+.cardrow {
+  display: grid; grid-template-columns: 34px 1.6em 1fr auto; align-items: center; gap: 6px;
+  padding: 5px 6px; border-radius: 6px; cursor: pointer; font-size: 12px;
+}
+.cardrow + .cardrow { margin-top: 2px; }
+.cardrow:hover { background: #f1f5f9; }
+.cardrow.is-active { background: #e3edf9; outline: 1px solid #2b6cb0; }
+.cardrow.is-dragover { outline: 2px dashed #2b6cb0; }
+.cardrow__thumb { width: 34px; height: auto; display: block; border: 1px solid #e2e8f0; background: #fff; }
+.cardrow__no { color: #94a3b8; text-align: right; }
+.cardrow__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cardrow__price { color: #475569; white-space: nowrap; }
+.cards__ops { display: flex; gap: 4px; }
+.cards__ops .btn { flex: 1; }
+.cards__hint { font-size: 11px; color: #64748b; margin: 0; line-height: 1.5; }

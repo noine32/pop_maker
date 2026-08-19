@@ -24,6 +24,17 @@
         <option value="600">600dpi（高精細）</option>
       </select>
     </label>
+    <label class="field field--inline">
+      <span>PNGの対象</span>
+      <select id="export-target" class="control">
+        <option value="sheet">シート（面付け済み）</option>
+        <option value="card">選択中のカードのみ</option>
+      </select>
+    </label>
+    <label class="field field--inline" id="export-allpages-wrap">
+      <input type="checkbox" id="export-allpages">
+      <span>全ページを保存する</span>
+    </label>
     <button type="button" id="btn-png" class="btn btn--primary">PNG保存</button>
     <button type="button" id="btn-print" class="btn">印刷</button>
     <button type="button" id="btn-save-json" class="btn btn--ghost">データ保存</button>
@@ -34,6 +45,18 @@
 </header>
 
 <main class="layout">
+
+  <!-- ============ カード一覧 ============ -->
+  <section class="cards" aria-labelledby="cards-title">
+    <h2 class="cards__title" id="cards-title">カード</h2>
+    <ul class="cards__list" id="card-list" role="listbox" aria-label="カード一覧" tabindex="0"></ul>
+    <div class="cards__ops">
+      <button type="button" class="btn btn--sm" id="btn-card-add">＋ 追加</button>
+      <button type="button" class="btn btn--sm" id="btn-card-dup">複製</button>
+      <button type="button" class="btn btn--sm btn--ghost" id="btn-card-del">削除</button>
+    </div>
+    <p class="cards__hint">↑↓ で選択／Alt＋↑↓ で並べ替え／ドラッグでも並べ替えできます</p>
+  </section>
 
   <!-- ============ 操作パネル ============ -->
   <section class="panel" aria-label="設定パネル">
@@ -143,35 +166,87 @@
       </div>
     </details>
 
+    <!-- カードの大きさ -->
+    <details class="sect" open>
+      <summary class="sect__head">3. カードの大きさ</summary>
+      <div class="sect__body">
+        <label class="field">
+          <span class="field__label">プリセット</span>
+          <select id="card-select" class="control" data-doc-path="card.id"></select>
+        </label>
+        <div class="field-row" id="card-custom-size" hidden>
+          <label class="field">
+            <span class="field__label">幅(mm)</span>
+            <input type="number" min="10" max="1000" step="0.5" class="control" data-doc-path="card.customW">
+          </label>
+          <label class="field">
+            <span class="field__label">高さ(mm)</span>
+            <input type="number" min="10" max="1000" step="0.5" class="control" data-doc-path="card.customH">
+          </label>
+        </div>
+        <label class="field field--inline">
+          <input type="checkbox" id="scale-with-card" checked>
+          <span>文字とレイアウトも比例させる</span>
+        </label>
+        <p class="hint">サイズ変更は元の値を書き換えます。元に戻したいときはテンプレートを選び直してください。</p>
+      </div>
+    </details>
+
+    <!-- 印刷シート -->
+    <details class="sect" open>
+      <summary class="sect__head">4. 印刷シート</summary>
+      <div class="sect__body">
+        <label class="field">
+          <span class="field__label">用紙</span>
+          <select id="paper-select" class="control" data-doc-path="sheet.id"></select>
+        </label>
+        <label class="field">
+          <span class="field__label">向き</span>
+          <select class="control" data-doc-path="sheet.orientation">
+            <option value="portrait">縦</option>
+            <option value="landscape">横</option>
+          </select>
+        </label>
+        <div class="field-row" id="custom-size" hidden>
+          <label class="field">
+            <span class="field__label">幅(mm)</span>
+            <input type="number" min="20" max="1000" class="control" data-doc-path="sheet.customW">
+          </label>
+          <label class="field">
+            <span class="field__label">高さ(mm)</span>
+            <input type="number" min="20" max="1000" class="control" data-doc-path="sheet.customH">
+          </label>
+        </div>
+        <div class="field-row">
+          <label class="field">
+            <span class="field__label">安全余白(mm)</span>
+            <input type="number" min="0" max="30" step="0.5" class="control" data-doc-path="sheet.margin">
+          </label>
+          <label class="field">
+            <span class="field__label">カード間隔(mm)</span>
+            <input type="number" min="0" max="20" step="0.5" class="control" data-doc-path="sheet.gap">
+          </label>
+        </div>
+        <label class="field field--inline">
+          <input type="checkbox" data-doc-path="sheet.allowRotate">
+          <span>90°回して枚数が増えるなら回す</span>
+        </label>
+        <label class="field field--inline">
+          <input type="checkbox" data-doc-path="sheet.center">
+          <span>用紙の中央に寄せる</span>
+        </label>
+        <label class="field field--inline">
+          <input type="checkbox" data-doc-path="sheet.cutLine">
+          <span>カット線を入れる</span>
+        </label>
+        <p class="hint">安全余白を 0mm にすると枚数は増えますが、フチなし印刷に対応したプリンタ以外では端が欠けます。</p>
+      </div>
+    </details>
+
     <!-- レイアウト -->
     <details class="sect">
-      <summary class="sect__head">3. 用紙とレイアウト</summary>
+      <summary class="sect__head">5. レイアウト</summary>
       <div class="sect__body">
-        <div class="grid grid--2">
-          <label class="field">
-            <span class="field__label">用紙サイズ</span>
-            <select class="control" data-path="paper.id" id="paper-select"></select>
-          </label>
-          <label class="field">
-            <span class="field__label">向き</span>
-            <select class="control" data-path="paper.orientation">
-              <option value="portrait">縦</option>
-              <option value="landscape">横</option>
-            </select>
-          </label>
-        </div>
-
-        <div class="grid grid--2" id="custom-size" hidden>
-          <label class="field">
-            <span class="field__label">幅（mm）</span>
-            <input type="number" min="20" max="1000" step="1" class="control" data-path="paper.customW">
-          </label>
-          <label class="field">
-            <span class="field__label">高さ（mm）</span>
-            <input type="number" min="20" max="1000" step="1" class="control" data-path="paper.customH">
-          </label>
-        </div>
-
         <div class="grid grid--2">
           <label class="field">
             <span class="field__label">文字揃え</span>
@@ -210,11 +285,12 @@
 
     <!-- デザイン -->
     <details class="sect">
-      <summary class="sect__head">4. デザイン・色</summary>
+      <summary class="sect__head">6. デザイン・色</summary>
       <div class="sect__body">
         <div class="field">
           <span class="field__label">テンプレート</span>
           <div class="templates" id="template-list"></div>
+          <button type="button" class="btn btn--sm" id="btn-apply-design">このデザインを全カードに適用</button>
           <p class="field__hint">※テンプレートを選ぶと色・フォント・枠線がまとめて変わります（文章はそのまま）</p>
         </div>
 
@@ -298,7 +374,7 @@
 
     <!-- 画像 -->
     <details class="sect">
-      <summary class="sect__head">5. 画像（写真・ロゴ）</summary>
+      <summary class="sect__head">7. 画像（写真・ロゴ）</summary>
       <div class="sect__body">
         <div class="btnrow">
           <button type="button" class="btn btn--primary" id="btn-image-add">画像を追加 / 差し替え</button>
@@ -341,7 +417,7 @@
 
     <!-- 保存 -->
     <details class="sect">
-      <summary class="sect__head">6. デザインの保存</summary>
+      <summary class="sect__head">8. デザインの保存</summary>
       <div class="sect__body">
         <div class="field">
           <span class="field__label">名前を付けて保存</span>
@@ -365,6 +441,17 @@
       <span class="preview__meta" id="preview-meta"></span>
       <span class="preview__status" id="status" role="status" aria-live="polite"></span>
     </div>
+    <div class="preview-tabs" role="tablist" aria-label="プレビューの表示">
+      <button type="button" class="ptab is-active" id="ptab-card"
+              role="tab" aria-selected="true" data-preview="card">カード</button>
+      <button type="button" class="ptab" id="ptab-sheet"
+              role="tab" aria-selected="false" data-preview="sheet">シート</button>
+      <span class="preview-pager" id="preview-pager" hidden>
+        <button type="button" class="btn btn--sm" id="btn-page-prev" aria-label="前のページ">◀</button>
+        <span id="page-label">1 / 1</span>
+        <button type="button" class="btn btn--sm" id="btn-page-next" aria-label="次のページ">▶</button>
+      </span>
+    </div>
     <div class="preview__stage" id="preview-stage">
       <canvas id="canvas" class="preview__canvas" role="img" aria-label="商品ポップのプレビュー"></canvas>
     </div>
@@ -375,8 +462,15 @@
 <script src="assets/js/fonts.js"></script>
 <script src="assets/js/text.js"></script>
 <script src="assets/js/presets.js"></script>
+<script src="assets/js/imposition.js"></script>
 <script src="assets/js/renderer.js"></script>
+<script src="assets/js/sheet-view.js"></script>
+<script src="assets/js/doc.js"></script>
 <script src="assets/js/storage.js"></script>
+<script src="assets/js/cards-ui.js"></script>
+<script src="assets/js/image-tool.js"></script>
+<script src="assets/js/preset-ui.js"></script>
+<script src="assets/js/export-tool.js"></script>
 <script src="assets/js/app.js"></script>
 </body>
 </html>
