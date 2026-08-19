@@ -258,6 +258,27 @@ var POPPresets = (function () {
     return Math.min(newW / oldW, newH / oldH);
   }
 
+  /** 基準サイズからの目標倍率と、適用済み倍率との差分を返す。
+      「前回からの比率」を毎回掛けると、縮めてから戻しても scaleFor が 1 を返すため
+      文字が小さいまま戻らない（利用者の「文字を勝手に縮めるな」に反する）。
+      基準からの目標倍率で管理し、その差分だけを掛けることで行き来しても元に戻る。 */
+  function scaleStep(scale, newW, newH) {
+    var s = scale || {};
+    var baseW = num(s.baseW, newW);
+    var baseH = num(s.baseH, newH);
+    var applied = num(s.applied, 1);
+    if (!(applied > 0)) applied = 1;
+    var target = scaleFor(baseW, baseH, newW, newH);
+    var delta = target / applied;
+    if (!isFinite(delta) || !(delta > 0)) delta = 1;
+    return { delta: delta, target: target };
+  }
+
+  /** 比例計算の基準。baseW×baseH のときに applied=1（＝そのままの値）になる。 */
+  function defaultScale(w, h) {
+    return { baseW: w, baseH: h, applied: 1 };
+  }
+
   var SCALE_TEXT_KEYS = ['catch', 'name', 'price', 'desc', 'note'];
 
   /** 対象キーが「実在するときだけ」スケールする。
@@ -350,6 +371,8 @@ var POPPresets = (function () {
     sheetInner: sheetInner,
     clampCustomCard: clampCustomCard,
     scaleFor: scaleFor,
+    scaleStep: scaleStep,
+    defaultScale: defaultScale,
     scaleCard: scaleCard,
     clampImage: clampImage,
     imageMaxSide: imageMaxSide,

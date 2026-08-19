@@ -40,6 +40,7 @@ var POPDoc = (function () {
       version: 2,
       activeIndex: 0,
       card: POPPresets.defaultCard(),
+      scale: POPPresets.defaultScale(44, 67),
       sheet: POPPresets.defaultSheet(),
       cards: [POPPresets.defaultCardState()]
     };
@@ -75,6 +76,7 @@ var POPDoc = (function () {
       version: 2,
       activeIndex: 0,
       card: { id: 'custom', customW: size.w, customH: size.h },
+      scale: POPPresets.defaultScale(size.w, size.h),
       sheet: {
         id: paper.id === 'custom' ? 'custom' : paper.id,
         orientation: paper.orientation === 'landscape' ? 'landscape' : 'portrait',
@@ -96,6 +98,11 @@ var POPDoc = (function () {
     doc.sheet = mergeDeep(POPPresets.defaultSheet(), doc.sheet);
     doc.sheet.margin = clamp(num(doc.sheet.margin, 5), 0, 30);
     doc.sheet.gap = clamp(num(doc.sheet.gap, 0), 0, 20);
+
+    /* 比例計算の基準。古い保存データには無いので、現在のカードサイズを基準として補う。 */
+    var cardMm = POPPresets.cardSize(doc.card);
+    doc.scale = mergeDeep(POPPresets.defaultScale(cardMm.w, cardMm.h), doc.scale);
+    if (!(Number(doc.scale.applied) > 0)) doc.scale.applied = 1;
 
     if (!Array.isArray(doc.cards) || !doc.cards.length) {
       doc.cards = [POPPresets.defaultCardState()];

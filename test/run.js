@@ -321,6 +321,59 @@ test('imageMaxSide: カード長辺×12px、800〜2000で頭打ち', function ()
   assert.strictEqual(POPPresets.imageMaxSide({ w: 210, h: 297 }), 2000);
 });
 
+test('scaleStep: 基準からの目標倍率と差分を返す', function () {
+  var sc = POPPresets.defaultScale(44, 67);
+  var a = POPPresets.scaleStep(sc, 30, 67);
+  assert.ok(Math.abs(a.target - 30 / 44) < 1e-9, 'target=' + a.target);
+  assert.ok(Math.abs(a.delta - 30 / 44) < 1e-9, 'delta=' + a.delta);
+});
+test('scaleStep: 元のサイズへ戻すと差分が逆数になる（可逆）', function () {
+  var sc = POPPresets.defaultScale(44, 67);
+  sc.applied = POPPresets.scaleStep(sc, 30, 67).target;
+  var back = POPPresets.scaleStep(sc, 44, 67);
+  assert.strictEqual(back.target, 1);
+  assert.ok(Math.abs(back.delta - 44 / 30) < 1e-9, 'delta=' + back.delta);
+});
+test('scaleStep: applied が不正でも 1 として扱う', function () {
+  var sc = { baseW: 44, baseH: 67, applied: 0 };
+  assert.ok(isFinite(POPPresets.scaleStep(sc, 30, 67).delta));
+  var sc2 = { baseW: 44, baseH: 67, applied: 'x' };
+  assert.ok(isFinite(POPPresets.scaleStep(sc2, 30, 67).delta));
+});
+test('カードサイズを行き来しても文字が元の大きさに戻る', function () {
+  var c = POPPresets.defaultCardState();
+  c.name.size = 64;
+  c.layout.padding = 14;
+  var sc = POPPresets.defaultScale(44, 67);
+
+  var down = POPPresets.scaleStep(sc, 30, 67);
+  POPPresets.scaleCard(c, down.delta, { w: 30, h: 67 });
+  sc.applied = down.target;
+  assert.ok(c.name.size < 64, '縮んでいること: ' + c.name.size);
+
+  var up = POPPresets.scaleStep(sc, 44, 67);
+  POPPresets.scaleCard(c, up.delta, { w: 44, h: 67 });
+  sc.applied = up.target;
+  /* 0.1pt / 0.1mm 単位の丸めぶんだけ誤差が出るので許容幅を持たせる */
+  assert.ok(Math.abs(c.name.size - 64) < 0.5, 'name.size=' + c.name.size);
+  assert.ok(Math.abs(c.layout.padding - 14) < 0.5, 'padding=' + c.layout.padding);
+});
+test('小刻みに縮めてから戻しても積み重ならない', function () {
+  var c = POPPresets.defaultCardState();
+  c.name.size = 64;
+  var sc = POPPresets.defaultScale(44, 67);
+  /* 矢印キーで 44 → 40 → 36 → 32 と下げてから 44 へ戻す操作を模す */
+  [40, 36, 32].forEach(function (w) {
+    var st = POPPresets.scaleStep(sc, w, 67);
+    POPPresets.scaleCard(c, st.delta, { w: w, h: 67 });
+    sc.applied = st.target;
+  });
+  var back = POPPresets.scaleStep(sc, 44, 67);
+  POPPresets.scaleCard(c, back.delta, { w: 44, h: 67 });
+  sc.applied = back.target;
+  assert.ok(Math.abs(c.name.size - 64) < 0.5, 'name.size=' + c.name.size);
+});
+
 /* ---------- POPDoc（ドキュメント操作・移行） ---------- */
 test('defaultDoc: カード1枚・44×67mm・A4シート', function () {
   var d = POPDoc.defaultDoc();
@@ -330,6 +383,19 @@ test('defaultDoc: カード1枚・44×67mm・A4シート', function () {
   assert.deepStrictEqual(POPPresets.cardSize(d.card), { w: 44, h: 67 });
   assert.strictEqual(d.sheet.id, 'a4');
   assert.strictEqual(d.sheet.margin, 5);
+});
+test('defaultDoc: 比例計算の基準を持つ', function () {
+  var d = POPDoc.defaultDoc();
+  assert.strictEqual(d.scale.baseW, 44);
+  assert.strictEqual(d.scale.baseH, 67);
+  assert.strictEqual(d.scale.applied, 1);
+});
+test('normalize: scale が無い古いデータでも補われる', function () {
+  var d = POPDoc.defaultDoc();
+  delete d.scale;
+  POPDoc.normalize(d);
+  assert.strictEqual(d.scale.applied, 1);
+  assert.strictEqual(d.scale.baseW, 44);
 });
 test('migrate: v1（A4の単品）→ カード1枚・シートもA4・余白0', function () {
   var v1 = POPPresets.sampleState();
@@ -356,6 +422,14 @@ test('migrate: v1（A5横）でもカードとシートが同寸になる', func
     margin: 0, gap: 0, allowRotate: true, center: true
   });
   assert.strictEqual(L.perPage, 1);
+});
+test('migrate: v1 は旧用紙の寸法が比例計算の基準になる', function () {
+  var v1 = POPPresets.sampleState();
+  v1.paper = { id: 'a5', orientation: 'portrait', customW: 150, customH: 100 };
+  var d = POPDoc.migrate(v1);
+  assert.strictEqual(d.scale.baseW, 148);
+  assert.strictEqual(d.scale.baseH, 210);
+  assert.strictEqual(d.scale.applied, 1);
 });
 test('migrate: v2 はそのまま（冪等）', function () {
   var d1 = POPDoc.defaultDoc();

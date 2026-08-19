@@ -453,6 +453,8 @@
   }
 
   /* カードの大きさが変わったら、全カードの文字・余白を比例させる。
+     基準サイズからの目標倍率で管理し、適用済みとの差分だけを掛けるので、
+     大きさを行き来しても文字は元に戻る（縮みっぱなしにならない）。
      縦横が入れ替わっただけのときは scaleFor が 1 を返すので縮まない（設計 §4.1）。 */
   function applyCardSizeChange() {
     var next = cardSizeMm();
@@ -460,10 +462,16 @@
     if (next.w === lastCardSize.w && next.h === lastCardSize.h) return;
 
     if (document.getElementById('scale-with-card').checked) {
-      var s = POPPresets.scaleFor(lastCardSize.w, lastCardSize.h, next.w, next.h);
-      doc.cards.forEach(function (c) { POPPresets.scaleCard(c, s, next); });
-      if (s !== 1) setStatus('カードの大きさに合わせて文字と余白を調整しました', true);
+      var step = POPPresets.scaleStep(doc.scale, next.w, next.h);
+      if (Math.abs(step.delta - 1) > 1e-9) {
+        doc.cards.forEach(function (c) { POPPresets.scaleCard(c, step.delta, next); });
+        setStatus('カードの大きさに合わせて文字と余白を調整しました', true);
+      }
+      doc.scale.applied = step.target;
     } else {
+      /* 比例させない指定のときは「今の見た目がこの大きさに対して正しい」とみなし、
+         基準を置き直す。そうしないと次に比例させたとき古い基準で計算されてしまう。 */
+      doc.scale = POPPresets.defaultScale(next.w, next.h);
       doc.cards.forEach(function (c) { POPPresets.clampImage(c.image, next); });
     }
     lastCardSize = next;
