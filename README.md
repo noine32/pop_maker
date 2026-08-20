@@ -118,7 +118,6 @@
 ```
 index.html              画面（ヘッダー・保存済みデザインの棚・3カラム）
 assets/css/style.css    操作画面のスタイル
-design_handoff_pop_maker_ui/   UI再設計の引き継ぎ仕様（実装の元になったデザイン）
 assets/js/
   fonts.js              フォント定義とWebフォントの読み込み
   text.js               日本語の折り返し（禁則処理）・数値の3桁区切り
@@ -133,6 +132,11 @@ assets/js/
   export-tool.js        出力（面付けした紙の印刷・画像保存）
   cards-ui.js           ポップ一覧の表示と操作
   app.js                画面の組み立てとイベント処理
+test/run.js             依存ライブラリなしのテスト
+docs/
+  screenshot.png        README に載せている画面
+  design_handoff_pop_maker_ui/   UI再設計の引き継ぎ仕様（この画面の元になったデザイン）
+  superpowers/          設計メモと実装計画
 ```
 
 ## 技術的なメモ
