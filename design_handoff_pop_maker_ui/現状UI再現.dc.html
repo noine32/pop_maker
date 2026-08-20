@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;padding:0;background:#f4f5f7;color:#1f2328;font-size:14px;line-height:1.6;font-family:"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic","Meiryo","Noto Sans JP",system-ui,-apple-system,sans-serif}
+*{box-sizing:border-box}
+a{color:#0b6bcb}a:hover{color:#0a5aab}
+summary{list-style:none}summary::-webkit-details-marker{display:none}
+</style>
+</helmet>
+<div style="min-height:100vh;background:#f4f5f7;font-family:'Hiragino Kaku Gothic ProN','Hiragino Sans','Yu Gothic','Meiryo','Noto Sans JP',system-ui,sans-serif;font-size:14px;line-height:1.6;color:#1f2328">
+
+  <header style="position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:16px;min-height:56px;padding:8px 16px;background:#fff;border-bottom:1px solid #dcdfe4;flex-wrap:wrap">
+    <h1 style="margin:0;font-size:16px;font-weight:700;letter-spacing:.02em;white-space:nowrap">商品ポップメーカー</h1>
+    <div style="display:flex;align-items:center;gap:8px;margin-left:auto;flex-wrap:wrap">
+      <label style="display:flex;flex-direction:row;align-items:center;gap:6px">
+        <span style="font-size:11px;font-weight:600;color:#616a75;white-space:nowrap">解像度</span>
+        <select style="font:inherit;font-size:13px;color:#1f2328;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:7px 9px">
+          <option>150dpi（軽い）</option><option selected="selected">300dpi（印刷推奨）</option><option>600dpi（高精細）</option>
+        </select>
+      </label>
+      <label style="display:flex;flex-direction:row;align-items:center;gap:6px">
+        <span style="font-size:12px;color:#1f2328;white-space:nowrap">PNGの対象</span>
+        <select style="font:inherit;font-size:13px;color:#1f2328;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:7px 9px">
+          <option>シート（面付け済み）</option><option>選択中のカードのみ</option>
+        </select>
+      </label>
+      <label style="display:flex;flex-direction:row;align-items:center;gap:6px;font-size:12px">
+        <input type="checkbox" style="accent-color:#0b6bcb;width:15px;height:15px" />
+        <span>全ページを保存する</span>
+      </label>
+      <button type="button" style="font:inherit;font-size:13px;font-weight:600;background:#0b6bcb;border:1px solid #0b6bcb;color:#fff;border-radius:8px;padding:7px 12px;cursor:pointer;white-space:nowrap">PNG保存</button>
+      <button type="button" style="font:inherit;font-size:13px;font-weight:600;color:#1f2328;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:7px 12px;cursor:pointer;white-space:nowrap">印刷</button>
+      <button type="button" style="font:inherit;font-size:13px;font-weight:600;color:#616a75;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:7px 12px;cursor:pointer;white-space:nowrap">データ保存</button>
+      <button type="button" style="font:inherit;font-size:13px;font-weight:600;color:#616a75;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:7px 12px;cursor:pointer;white-space:nowrap">データ読込</button>
+      <button type="button" style="font:inherit;font-size:13px;font-weight:600;color:#616a75;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:7px 12px;cursor:pointer;white-space:nowrap">リセット</button>
+    </div>
+  </header>
+
+  <main style="display:grid;grid-template-columns:minmax(190px,230px) 400px 1fr;align-items:start;gap:0;min-height:calc(100vh - 56px)">
+
+    <section style="display:flex;flex-direction:column;gap:8px;min-width:190px;max-width:230px;padding:8px">
+      <h2 style="font-size:13px;font-weight:700;margin:0">カード</h2>
+      <ul style="list-style:none;margin:0;padding:4px;overflow-y:auto;max-height:calc(100vh - 260px);border:1px solid #d8dde3;border-radius:8px;background:#fff;display:flex;flex-direction:column;gap:2px">
+        <sc-for list="{{ rows }}" as="r" hint-placeholder-count="4">
+          <li style="display:grid;grid-template-columns:34px 1.6em 1fr auto;align-items:center;gap:6px;padding:5px 6px;border-radius:6px;cursor:pointer;font-size:12px;background:{{ r.bg }};outline:{{ r.outline }}">
+            <span style="width:34px;height:52px;display:block;border:1px solid #e2e8f0;background:#fff"></span>
+            <span style="color:#94a3b8;text-align:right">{{ r.no }}</span>
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.name }}</span>
+            <span style="color:#475569;white-space:nowrap">{{ r.price }}</span>
+          </li>
+        </sc-for>
+      </ul>
+      <div style="display:flex;gap:4px">
+        <button type="button" style="flex:1;font:inherit;font-size:12px;font-weight:600;color:#1f2328;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:5px 10px;cursor:pointer">＋ 追加</button>
+        <button type="button" style="flex:1;font:inherit;font-size:12px;font-weight:600;color:#1f2328;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:5px 10px;cursor:pointer">複製</button>
+        <button type="button" style="flex:1;font:inherit;font-size:12px;font-weight:600;color:#616a75;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:5px 10px;cursor:pointer">削除</button>
+      </div>
+      <p style="font-size:11px;color:#64748b;margin:0;line-height:1.5">↑↓ で選択／Alt＋↑↓ で並べ替え／ドラッグでも並べ替えできます</p>
+    </section>
+
+    <section style="border-right:1px solid #dcdfe4;background:#fff;padding:8px 0 64px;position:sticky;top:56px;max-height:calc(100vh - 56px);overflow-y:auto">
+
+      <details open="open" style="border-bottom:1px solid #dcdfe4">
+        <summary style="cursor:pointer;padding:12px 16px;font-weight:700;font-size:13px;display:flex;align-items:center;gap:8px;user-select:none"><span style="color:#616a75">▾</span>1. 内容を入力</summary>
+        <div style="padding:4px 16px 18px;display:flex;flex-direction:column;gap:12px">
+          <label style="display:flex;flex-direction:column;gap:4px;min-width:0">
+            <span style="font-size:12px;font-weight:600;color:#616a75;display:flex;align-items:baseline;gap:4px">キャッチコピー<span style="font-size:11px;font-weight:400;color:#616a75">（任意）</span></span>
+            <input type="text" placeholder="例）大人気！本日限り" style="width:100%;font:inherit;font-size:13px;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:7px 9px" />
+          </label>
+          <label style="display:flex;flex-direction:column;gap:4px;min-width:0">
+            <span style="font-size:12px;font-weight:600;color:#616a75;display:flex;align-items:baseline;gap:4px">商品名<span style="font-size:10px;font-weight:700;color:#fff;background:#c0392b;border-radius:3px;padding:0 4px">必須</span></span>
+            <textarea rows="2" placeholder="例）北海道産 生クリーム大福" style="width:100%;font:inherit;font-size:13px;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:7px 9px;resize:vertical;line-height:1.5"></textarea>
+          </label>
+          <div style="display:grid;gap:10px;grid-template-columns:1fr 1fr">
+            <label style="display:flex;flex-direction:column;gap:4px;min-width:0">
+              <span style="font-size:12px;font-weight:600;color:#616a75;display:flex;align-items:baseline;gap:4px">価格<span style="font-size:10px;font-weight:700;color:#fff;background:#c0392b;border-radius:3px;padding:0 4px">必須</span></span>
+              <input type="text" placeholder="例）980" style="width:100%;font:inherit;font-size:13px;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:7px 9px" />
+            </label>
+            <label style="display:flex;flex-direction:column;gap:4px;min-width:0">
+              <span style="font-size:12px;font-weight:600;color:#616a75">税表記</span>
+              <select style="width:100%;font:inherit;font-size:13px;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:7px 9px">
+                <option>表示しない</option><option selected="selected">税込</option><option>税抜</option><option>本体価格</option><option>税込価格</option>
+              </select>
+            </label>
+          </div>
+          <div style="display:grid;gap:10px;grid-template-columns:repeat(3,1fr)">
+            <label style="display:flex;flex-direction:column;gap:4px;min-width:0">
+              <span style="font-size:12px;font-weight:600;color:#616a75">通貨記号</span>
+              <select style="width:100%;font:inherit;font-size:13px;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:7px 9px"><option>なし</option><option selected="selected">¥</option><option>＠</option></select>
+            </label>
+            <label style="display:flex;flex-direction:column;gap:4px;min-width:0">
+              <span style="font-size:12px;font-weight:600;color:#616a75">単位</span>
+              <select style="width:100%;font:inherit;font-size:13px;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:7px 9px"><option selected="selected">円</option><option>円〜</option><option>なし</option></select>
+            </label>
+            <label style="display:flex;flex-direction:column;gap:4px;min-width:0">
+              <span style="font-size:12px;font-weight:600;color:#616a75;display:flex;align-items:baseline;gap:4px">補足<span style="font-size:11px;font-weight:400;color:#616a75">（任意）</span></span>
+              <input type="text" placeholder="例）/ 100g" style="width:100%;font:inherit;font-size:13px;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:7px 9px" />
+            </label>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <label style="display:flex;align-items:center;gap:7px;font-size:12.5px;cursor:pointer">
+              <input type="checkbox" style="accent-color:#0b6bcb;width:15px;height:15px" /><span>参考価格を打ち消し線で表示する</span>
+            </label>
+            <input type="text" placeholder="例）1,280（通常価格）" style="width:100%;font:inherit;font-size:13px;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:7px 9px" />
+          </div>
+          <label style="display:flex;flex-direction:column;gap:4px;min-width:0">
+            <span style="font-size:12px;font-weight:600;color:#616a75">商品の説明文</span>
+            <textarea rows="4" placeholder="例）北海道産の生クリームを使用したなめらかな口どけ。冷やしてお召し上がりください。" style="width:100%;font:inherit;font-size:13px;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:7px 9px;resize:vertical;line-height:1.5"></textarea>
+          </label>
+          <label style="display:flex;flex-direction:column;gap:4px;min-width:0">
+            <span style="font-size:12px;font-weight:600;color:#616a75;display:flex;align-items:baseline;gap:4px">注記・店名<span style="font-size:11px;font-weight:400;color:#616a75">（任意）</span></span>
+            <input type="text" placeholder="例）※数量限定・なくなり次第終了　◯◯ストア" style="width:100%;font:inherit;font-size:13px;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:7px 9px" />
+          </label>
+        </div>
+      </details>
+
+      <details open="open" style="border-bottom:1px solid #dcdfe4">
+        <summary style="cursor:pointer;padding:12px 16px;font-weight:700;font-size:13px;display:flex;align-items:center;gap:8px;user-select:none"><span style="color:#616a75">▾</span>2. 文字の大きさ・フォント</summary>
+        <div style="padding:4px 16px 18px;display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;gap:2px;background:#f4f5f7;border-radius:8px;padding:3px;flex-wrap:wrap">
+            <button type="button" style="flex:1 1 auto;font:inherit;font-size:12px;font-weight:600;color:#0b6bcb;background:#fff;border:none;border-radius:6px;padding:6px 4px;cursor:pointer;box-shadow:0 1px 2px rgba(16,24,40,.06),0 4px 12px rgba(16,24,40,.06)">商品名</button>
+            <button type="button" style="flex:1 1 auto;font:inherit;font-size:12px;font-weight:600;color:#616a75;background:transparent;border:none;border-radius:6px;padding:6px 4px;cursor:pointer">キャッチ</button>
+            <button type="button" style="flex:1 1 auto;font:inherit;font-size:12px;font-weight:600;color:#616a75;background:transparent;border:none;border-radius:6px;padding:6px 4px;cursor:pointer">価格</button>
+            <button type="button" style="flex:1 1 auto;font:inherit;font-size:12px;font-weight:600;color:#616a75;background:transparent;border:none;border-radius:6px;padding:6px 4px;cursor:pointer">説明文</button>
+            <button type="button" style="flex:1 1 auto;font:inherit;font-size:12px;font-weight:600;color:#616a75;background:transparent;border:none;border-radius:6px;padding:6px 4px;cursor:pointer">注記</button>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px;padding-top:4px">
+            <label style="display:flex;flex-direction:column;gap:4px">
+              <span style="font-size:12px;font-weight:600;color:#616a75">商品名のフォント</span>
+              <select style="width:100%;font:inherit;font-size:13px;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:7px 9px">
+                <optgroup label="標準（このPCのフォント）"><option selected="selected">ゴシック体（標準）</option><option>明朝体</option><option>丸ゴシック体</option></optgroup>
+                <optgroup label="ゴシック体"><option>Noto Sans JP（Web）</option><option>Stick（角ゴ細・Web）</option><option>Dela Gothic One（極太・Web）</option></optgroup>
+                <optgroup label="明朝体"><option>Noto Serif JP（Web）</option><option>Kaisei Decol（やわらか明朝・Web）</option></optgroup>
+                <optgroup label="丸ゴシック"><option>M PLUS Rounded 1c（丸・Web）</option><option>小杉丸ゴシック（Web）</option><option>RocknRoll One（ポップ・Web）</option></optgroup>
+                <optgroup label="手書き"><option>Yusei Magic（手書き風・Web）</option><option>Zen Kurenaido（鉛筆風・Web）</option><option>Klee One（硬筆・Web）</option><option>Yomogi（ゆるカジュアル・Web）</option></optgroup>
+                <optgroup label="筆・和レトロ"><option>Yuji Syuku（筆・楷書・Web）</option><option>Yuji Boku（筆・素朴・Web）</option><option>Yuji Mai（筆・流麗・Web）</option><option>New Tegomin（手書き明朝・Web）</option><option>Kiwi Maru（丸明朝・Web）</option></optgroup>
+                <optgroup label="かわいい・ポップ"><option>Hachi Maru Pop（丸文字・Web）</option><option>Mochiy Pop One（太丸ポップ・Web）</option><option>Potta One（太マーカー・Web）</option></optgroup>
+              </select>
+            </label>
+            <div style="display:flex;gap:8px;align-items:center">
+              <button type="button" style="font:inherit;font-size:12px;font-weight:600;color:#1f2328;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:5px 10px;cursor:pointer">このフォントを他の項目にも適用</button>
+            </div>
+            <label style="display:flex;flex-direction:column;gap:4px">
+              <span style="font-size:12px;font-weight:600;color:#616a75;display:flex;align-items:baseline;gap:4px">文字サイズ <output style="font-variant-numeric:tabular-nums;color:#1f2328;font-weight:700">13.4</output> pt</span>
+              <div style="display:flex;gap:8px;align-items:center">
+                <input type="range" min="10" max="300" step="1" value="13" style="width:100%;padding:0;border:none;background:transparent;accent-color:#0b6bcb;height:22px" />
+                <input type="number" min="10" max="300" step="1" value="13.4" style="max-width:82px;font:inherit;font-size:13px;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:7px 9px" />
+              </div>
+            </label>
+            <div style="display:grid;gap:10px;grid-template-columns:1fr 1fr">
+              <label style="display:flex;flex-direction:column;gap:4px">
+                <span style="font-size:12px;font-weight:600;color:#616a75">文字の太さ</span>
+                <select style="width:100%;font:inherit;font-size:13px;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:7px 9px"><option>標準</option><option selected="selected">太字</option><option>極太</option></select>
+              </label>
+              <label style="display:flex;flex-direction:column;gap:4px">
+                <span style="font-size:12px;font-weight:600;color:#616a75">文字色</span>
+                <input type="color" value="#111111" style="width:100%;padding:2px;height:34px;cursor:pointer;background:#fff;border:1px solid #dcdfe4;border-radius:8px" />
+              </label>
+            </div>
+            <label style="display:flex;flex-direction:column;gap:4px">
+              <span style="font-size:12px;font-weight:600;color:#616a75;display:flex;align-items:baseline;gap:4px">行間 <output style="font-variant-numeric:tabular-nums;color:#1f2328;font-weight:700">1.25</output></span>
+              <input type="range" min="1" max="2.6" step="0.05" value="1.25" style="width:100%;padding:0;border:none;background:transparent;accent-color:#0b6bcb;height:22px" />
+            </label>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <span style="font-size:12px;font-weight:600;color:#616a75">全体の文字サイズ</span>
+            <div style="display:flex;gap:8px;align-items:center">
+              <button type="button" style="font:inherit;font-size:12px;font-weight:600;color:#1f2328;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:5px 10px;cursor:pointer">すべて小さく −</button>
+              <button type="button" style="font:inherit;font-size:12px;font-weight:600;color:#1f2328;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:5px 10px;cursor:pointer">すべて大きく ＋</button>
+            </div>
+          </div>
+          <label style="display:flex;align-items:center;gap:7px;font-size:12.5px;cursor:pointer">
+            <input type="checkbox" checked="checked" style="accent-color:#0b6bcb;width:15px;height:15px" /><span>用紙からはみ出すときは自動で縮小する</span>
+          </label>
+        </div>
+      </details>
+
+      <details open="open" style="border-bottom:1px solid #dcdfe4">
+        <summary style="cursor:pointer;padding:12px 16px;font-weight:700;font-size:13px;display:flex;align-items:center;gap:8px;user-select:none"><span style="color:#616a75">▾</span>3. カードの大きさ</summary>
+        <div style="padding:4px 16px 18px;display:flex;flex-direction:column;gap:12px">
+          <label style="display:flex;flex-direction:column;gap:4px">
+            <span style="font-size:12px;font-weight:600;color:#616a75">プリセット</span>
+            <select style="width:100%;font:inherit;font-size:13px;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:7px 9px">
+              <option selected="selected">44×67mm（縦）</option><option>67×44mm（横）</option><option>名刺（91×55mm）</option><option>A8（52×74mm）</option><option>A7（74×105mm）</option><option>B8・JIS（64×91mm）</option><option>正方形（50×50mm）</option><option>カスタム（mm指定）</option>
+            </select>
+          </label>
+          <label style="display:flex;flex-direction:row;align-items:center;gap:6px;font-size:12px">
+            <input type="checkbox" checked="checked" style="accent-color:#0b6bcb;width:15px;height:15px" /><span>文字とレイアウトも比例させる</span>
+          </label>
+          <p style="font-size:11px;color:#64748b;margin:4px 0 0;line-height:1.5">サイズ変更は元の値を書き換えます。元に戻したいときはテンプレートを選び直してください。</p>
+        </div>
+      </details>
+
+      <details open="open" style="border-bottom:1px solid #dcdfe4">
+        <summary style="cursor:pointer;padding:12px 16px;font-weight:700;font-size:13px;display:flex;align-items:center;gap:8px;user-select:none"><span style="color:#616a75">▾</span>4. 印刷シート</summary>
+        <div style="padding:4px 16px 18px;display:flex;flex-direction:column;gap:12px">
+          <label style="display:flex;flex-direction:column;gap:4px">
+            <span style="font-size:12px;font-weight:600;color:#616a75">用紙</span>
+            <select style="width:100%;font:inherit;font-size:13px;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:7px 9px">
+              <optgroup label="JIS A判"><option>A3（297×420mm）</option><option selected="selected">A4（210×297mm）</option><option>A5（148×210mm）</option><option>A6（105×148mm）</option><option>A7（74×105mm）</option><option>A8（52×74mm）</option></optgroup>
+              <optgroup label="JIS B判"><option>B4・JIS（257×364mm）</option><option>B5・JIS（182×257mm）</option><option>B6・JIS（128×182mm）</option><option>B7・JIS（91×128mm）</option><option>B8・JIS（64×91mm）</option></optgroup>
+              <optgroup label="その他定型"><option>はがき（100×148mm）</option><option>名刺（91×55mm）</option><option>正方形（100×100mm）</option><option>短冊（210×74mm）</option></optgroup>
+              <optgroup label="カスタム"><option>カスタムサイズ</option></optgroup>
+            </select>
+          </label>
+          <label style="display:flex;flex-direction:column;gap:4px">
+            <span style="font-size:12px;font-weight:600;color:#616a75">向き</span>
+            <select style="width:100%;font:inherit;font-size:13px;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:7px 9px"><option selected="selected">縦</option><option>横</option></select>
+          </label>
+          <div style="display:flex;gap:8px">
+            <label style="flex:1;display:flex;flex-direction:column;gap:4px">
+              <span style="font-size:12px;font-weight:600;color:#616a75">安全余白(mm)</span>
+              <input type="number" min="0" max="30" step="0.5" value="5" style="width:100%;font:inherit;font-size:13px;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:7px 9px" />
+            </label>
+            <label style="flex:1;display:flex;flex-direction:column;gap:4px">
+              <span style="font-size:12px;font-weight:600;color:#616a75">カード間隔(mm)</span>
+              <input type="number" min="0" max="20" step="0.5" value="0" style="width:100%;font:inherit;font-size:13px;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:7px 9px" />
+            </label>
+          </div>
+          <label style="display:flex;flex-direction:row;align-items:center;gap:6px;font-size:12px"><input type="checkbox" checked="checked" style="accent-color:#0b6bcb;width:15px;height:15px" /><span>90°回して枚数が増えるなら回す</span></label>
+          <label style="display:flex;flex-direction:row;align-items:center;gap:6px;font-size:12px"><input type="checkbox" checked="checked" style="accent-color:#0b6bcb;width:15px;height:15px" /><span>用紙の中央に寄せる</span></label>
+          <label style="display:flex;flex-direction:row;align-items:center;gap:6px;font-size:12px"><input type="checkbox" checked="checked" style="accent-color:#0b6bcb;width:15px;height:15px" /><span>カット線を入れる</span></label>
+          <p style="font-size:11px;color:#64748b;margin:4px 0 0;line-height:1.5">安全余白を 0mm にすると枚数は増えますが、フチなし印刷に対応したプリンタ以外では端が欠けます。</p>
+        </div>
+      </details>
+
+      <details style="border-bottom:1px solid #dcdfe4">
+        <summary style="cursor:pointer;padding:12px 16px;font-weight:700;font-size:13px;display:flex;align-items:center;gap:8px;user-select:none"><span style="color:#616a75">▸</span>5. レイアウト</summary>
+        <div style="padding:4px 16px 18px;display:flex;flex-direction:column;gap:12px">
+          <div style="display:grid;gap:10px;grid-template-columns:1fr 1fr">
+            <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;font-weight:600;color:#616a75">文字揃え</span>
+              <select style="width:100%;font:inherit;font-size:13px;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:7px 9px"><option>中央揃え</option><option>左揃え</option><option>右揃え</option></select></label>
+            <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;font-weight:600;color:#616a75">縦の配置</span>
+              <select style="width:100%;font:inherit;font-size:13px;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:7px 9px"><option>中央</option><option>上寄せ</option><option>上下いっぱいに広げる</option></select></label>
+          </div>
+          <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;font-weight:600;color:#616a75">余白 <output style="font-weight:700;color:#1f2328">2.9</output> mm</span>
+            <input type="range" min="0" max="40" step="1" value="3" style="width:100%;padding:0;border:none;background:transparent;accent-color:#0b6bcb;height:22px" /></label>
+          <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;font-weight:600;color:#616a75">要素の間隔 <output style="font-weight:700;color:#1f2328">1.5</output> mm</span>
+            <input type="range" min="0" max="30" step="1" value="2" style="width:100%;padding:0;border:none;background:transparent;accent-color:#0b6bcb;height:22px" /></label>
+          <label style="display:flex;align-items:center;gap:7px;font-size:12.5px;cursor:pointer"><input type="checkbox" checked="checked" style="accent-color:#0b6bcb;width:15px;height:15px" /><span>商品名と価格の間に区切り線を入れる</span></label>
+        </div>
+      </details>
+
+      <details style="border-bottom:1px solid #dcdfe4">
+        <summary style="cursor:pointer;padding:12px 16px;font-weight:700;font-size:13px;display:flex;align-items:center;gap:8px;user-select:none"><span style="color:#616a75">▸</span>6. デザイン・色</summary>
+        <div style="padding:4px 16px 18px;display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <span style="font-size:12px;font-weight:600;color:#616a75">テンプレート</span>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+              <sc-for list="{{ templates }}" as="t" hint-placeholder-count="9">
+                <button type="button" style="border:2px solid {{ t.border }};border-radius:8px;background:#fff;padding:0;cursor:pointer;overflow:hidden;font:inherit;text-align:center">
+                  <span style="height:40px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;background:{{ t.bg }};color:{{ t.fg }}">￥298</span>
+                  <span style="display:block;font-size:11px;padding:4px 2px;color:#616a75;border-top:1px solid #dcdfe4">{{ t.name }}</span>
+                </button>
+              </sc-for>
+            </div>
+            <button type="button" style="align-self:flex-start;font:inherit;font-size:12px;font-weight:600;color:#1f2328;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:5px 10px;cursor:pointer;margin-top:4px">このデザインを全カードに適用</button>
+            <p style="font-size:11px;font-weight:400;color:#616a75;margin:0">※テンプレートを選ぶと色・フォント・枠線がまとめて変わります（文章はそのまま）</p>
+          </div>
+          <div style="display:grid;gap:10px;grid-template-columns:1fr 1fr">
+            <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;font-weight:600;color:#616a75">背景色</span>
+              <input type="color" value="#ffffff" style="width:100%;padding:2px;height:34px;cursor:pointer;background:#fff;border:1px solid #dcdfe4;border-radius:8px" /></label>
+            <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;font-weight:600;color:#616a75">アクセント色</span>
+              <input type="color" value="#333333" style="width:100%;padding:2px;height:34px;cursor:pointer;background:#fff;border:1px solid #dcdfe4;border-radius:8px" /></label>
+          </div>
+          <div style="display:grid;gap:10px;grid-template-columns:repeat(3,1fr)">
+            <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;font-weight:600;color:#616a75">枠線</span>
+              <select style="width:100%;font:inherit;font-size:13px;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:7px 9px"><option>なし</option><option selected="selected">実線</option><option>二重線</option><option>破線</option><option>角丸</option></select></label>
+            <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;font-weight:600;color:#616a75">太さ <output style="font-weight:700;color:#1f2328">0.3</output> mm</span>
+              <input type="range" min="0.2" max="8" step="0.2" value="0.3" style="width:100%;padding:0;border:none;background:transparent;accent-color:#0b6bcb;height:22px" /></label>
+            <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;font-weight:600;color:#616a75">枠線の色</span>
+              <input type="color" value="#333333" style="width:100%;padding:2px;height:34px;cursor:pointer;background:#fff;border:1px solid #dcdfe4;border-radius:8px" /></label>
+          </div>
+          <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;font-weight:600;color:#616a75">ヘッダー帯</span>
+            <select style="width:100%;font:inherit;font-size:13px;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:7px 9px"><option selected="selected">なし</option><option>上に帯を入れる</option><option>商品名の背景を塗る</option></select></label>
+          <hr style="border:none;border-top:1px solid #dcdfe4;margin:4px 0;width:100%" />
+          <label style="display:flex;align-items:center;gap:7px;font-size:12.5px;cursor:pointer"><input type="checkbox" style="accent-color:#0b6bcb;width:15px;height:15px" /><span>バッジを表示する</span></label>
+          <div style="display:grid;gap:10px;grid-template-columns:1fr 1fr">
+            <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;font-weight:600;color:#616a75">バッジの文字</span>
+              <input type="text" placeholder="例）NEW / おすすめ / 半額" style="width:100%;font:inherit;font-size:13px;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:7px 9px" /></label>
+            <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;font-weight:600;color:#616a75">スタイル</span>
+              <select style="width:100%;font:inherit;font-size:13px;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:7px 9px"><option>角丸タグ（上部）</option><option>リボン（右上・斜め）</option><option>丸印（右上）</option></select></label>
+          </div>
+        </div>
+      </details>
+
+      <details style="border-bottom:1px solid #dcdfe4">
+        <summary style="cursor:pointer;padding:12px 16px;font-weight:700;font-size:13px;display:flex;align-items:center;gap:8px;user-select:none"><span style="color:#616a75">▸</span>7. 画像（写真・ロゴ）</summary>
+        <div style="padding:4px 16px 18px;display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;gap:8px;align-items:center">
+            <button type="button" style="font:inherit;font-size:13px;font-weight:600;background:#0b6bcb;border:1px solid #0b6bcb;color:#fff;border-radius:8px;padding:7px 12px;cursor:pointer">画像を追加 / 差し替え</button>
+            <button type="button" style="font:inherit;font-size:13px;font-weight:600;color:#616a75;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:7px 12px;cursor:pointer">削除</button>
+          </div>
+        </div>
+      </details>
+
+      <details style="border-bottom:1px solid #dcdfe4">
+        <summary style="cursor:pointer;padding:12px 16px;font-weight:700;font-size:13px;display:flex;align-items:center;gap:8px;user-select:none"><span style="color:#616a75">▸</span>8. デザインの保存</summary>
+        <div style="padding:4px 16px 18px;display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <span style="font-size:12px;font-weight:600;color:#616a75">名前を付けて保存</span>
+            <div style="display:flex;gap:8px;align-items:center">
+              <input type="text" placeholder="例）お菓子コーナー用" style="width:100%;font:inherit;font-size:13px;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:7px 9px" />
+              <button type="button" style="font:inherit;font-size:13px;font-weight:600;color:#1f2328;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:7px 12px;cursor:pointer">保存</button>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <span style="font-size:12px;font-weight:600;color:#616a75">保存済み</span>
+            <ul style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px">
+              <li style="display:flex;align-items:center;gap:6px;border:1px solid #dcdfe4;border-radius:8px;padding:5px 6px 5px 10px;font-size:12.5px">
+                <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">お菓子コーナー用</span>
+                <button type="button" style="font:inherit;font-size:12px;font-weight:600;color:#1f2328;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:5px 10px;cursor:pointer">読込</button>
+                <button type="button" style="font:inherit;font-size:12px;font-weight:600;color:#616a75;background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:5px 10px;cursor:pointer">削除</button>
+              </li>
+            </ul>
+          </div>
+          <p style="font-size:11px;font-weight:400;color:#616a75;margin:0">保存先はこのブラウザ内（localStorage）です。編集内容は自動保存され、次回開いたときに復元されます。</p>
+        </div>
+      </details>
+    </section>
+
+    <section style="padding:16px 20px 40px;display:flex;flex-direction:column;align-items:center;gap:10px;min-width:0">
+      <div style="width:100%;max-width:720px;display:flex;justify-content:space-between;gap:12px;font-size:12px;color:#616a75">
+        <span>カード 44×67mm ／ A4縦・16枚／ページ ・ 1ページ</span>
+        <span style="color:#0b6bcb;font-weight:600">自動保存しました</span>
+      </div>
+      <div style="width:100%;max-width:720px;display:flex;align-items:center;gap:6px;margin-bottom:8px">
+        <button type="button" style="border:1px solid #2b6cb0;background:#2b6cb0;color:#fff;font-weight:700;border-radius:999px;padding:4px 14px;font-size:12px;cursor:pointer;font-family:inherit">カード</button>
+        <button type="button" style="border:1px solid #d8dde3;background:#fff;border-radius:999px;padding:4px 14px;font-size:12px;cursor:pointer;color:#475569;font-family:inherit">シート</button>
+      </div>
+      <div style="width:100%;max-width:720px;display:flex;justify-content:center;align-items:flex-start;background-image:linear-gradient(45deg,#e9ebee 25%,transparent 25%,transparent 75%,#e9ebee 75%),linear-gradient(45deg,#e9ebee 25%,transparent 25%,transparent 75%,#e9ebee 75%);background-size:20px 20px;background-position:0 0,10px 10px;background-color:#f8f9fa;border:1px solid #dcdfe4;border-radius:10px;padding:20px">
+        <div style="width:378px;height:576px;background:#fff;border:3px solid #333;box-shadow:0 2px 6px rgba(0,0,0,.12),0 12px 32px rgba(0,0,0,.12);padding:25px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:13px;text-align:center">
+          <div style="font-size:13px;font-weight:700;color:#666;line-height:1.3">本日のおすすめ</div>
+          <div style="font-size:40px;font-weight:700;color:#111;line-height:1.25">北海道産<br />生クリーム大福</div>
+          <div style="width:60%;border-top:1px solid #333"></div>
+          <div style="display:flex;align-items:baseline;justify-content:center;color:#111;font-weight:900">
+            <span style="font-size:32px">¥</span><span style="font-size:70px;line-height:1">298</span><span style="font-size:26px">円</span>
+            <span style="font-size:16px;font-weight:700;margin-left:4px">（税込）</span>
+          </div>
+          <div style="font-size:11.5px;color:#333;line-height:1.6">北海道産の生クリームをたっぷり使用。<br />なめらかな口どけをお楽しみください。</div>
+          <div style="font-size:8px;color:#777;line-height:1.4">※数量限定・なくなり次第終了</div>
+        </div>
+      </div>
+      <p style="font-size:11px;color:#616a75;margin:0">プレビューは実際の印刷仕上がりと同じレイアウトです。</p>
+    </section>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    const cards = [
+      { name: '北海道産 生クリーム大福', price: '¥298' },
+      { name: '和栗のモンブラン', price: '¥480' },
+      { name: '塩バターロール', price: '¥138' },
+      { name: '（無題）', price: '' }
+    ];
+    return {
+      rows: cards.map((c, i) => ({
+        no: i + 1, name: c.name, price: c.price,
+        bg: i === 0 ? '#e3edf9' : 'transparent',
+        outline: i === 0 ? '1px solid #2b6cb0' : 'none'
+      })),
+      templates: [
+        { id: 'simple', name: 'シンプル', bg: '#ffffff', fg: '#222222' },
+        { id: 'sale', name: 'セール', bg: '#e60012', fg: '#ffff00' },
+        { id: 'pop', name: 'ポップ', bg: '#ffe100', fg: '#ff6a00' },
+        { id: 'natural', name: 'ナチュラル', bg: '#efe7d8', fg: '#5c4a33' },
+        { id: 'handwrite', name: '手書き風', bg: '#ffffff', fg: '#2b6cb0' },
+        { id: 'cute', name: 'かわいい', bg: '#fff0f5', fg: '#e05a8a' },
+        { id: 'japanese', name: '和風', bg: '#f7f3e8', fg: '#7b2d26' },
+        { id: 'retro', name: 'レトロ', bg: '#f3efe3', fg: '#4a6741' },
+        { id: 'dark', name: 'ダーク', bg: '#1f2933', fg: '#f0b429' }
+      ].map((t, i) => ({ ...t, border: i === 0 ? '#0b6bcb' : '#dcdfe4' }))
+    };
+  }
+}
+</script>
+</body>
+</html>
