@@ -1,5 +1,5 @@
 /* ===========================================================
-   操作パネルの組み立て（文字設定タブ・用紙/カードの選択肢・テンプレート一覧）
+   操作パネルの組み立て（文字設定の項目別パネル・用紙/ポップの選択肢・テンプレート一覧）
    状態は持たず、DOM を組み立てるだけの層。
    =========================================================== */
 var POPPanelsUI = (function () {
@@ -39,45 +39,47 @@ var POPPanelsUI = (function () {
         '" id="panel-' + k + '" role="tabpanel" aria-labelledby="tab-' + k + '" tabindex="0" data-panel="' + k + '">');
 
       parts.push(
-        '<label class="field"><span class="field__label">' + f.label + 'のフォント</span>' +
+        '<label class="field"><span class="field__label field__label--sub">' + f.label + 'のフォント' +
+        '<span class="field__hint">全' + POPFonts.LIST.length + '種／系統別</span></span>' +
         '<select class="control" data-path="' + k + '.font">' + fontOptions() + '</select></label>' +
-        '<div class="btnrow"><button type="button" class="btn btn--sm" data-apply-font="' + k + '">' +
-        'このフォントを他の項目にも適用</button></div>'
+        '<button type="button" class="btn btn--sm btn--start" data-apply-font="' + k + '">' +
+        'このフォントを他の項目にも適用</button>'
       );
 
       parts.push(
-        '<label class="field"><span class="field__label">文字サイズ ' +
+        '<label class="field"><span class="field__label field__label--sub">文字サイズ ' +
         '<output class="field__out" data-out="' + k + '.size"></output> pt</span>' +
         '<div class="btnrow">' +
         '<input type="range" class="control control--range" min="' + f.min + '" max="' + f.max + '" step="1" data-path="' + k + '.size">' +
-        '<input type="number" class="control" style="max-width:82px" min="' + f.min + '" max="' + f.max + '" step="1" data-path="' + k + '.size">' +
+        '<input type="number" class="control" style="width:78px;flex:none" min="' + f.min + '" max="' + f.max + '" step="1" data-path="' + k + '.size">' +
         '</div></label>'
       );
 
       parts.push(
         '<div class="grid grid--2">' +
-        '<label class="field"><span class="field__label">文字の太さ</span>' +
+        '<label class="field"><span class="field__label field__label--sub">太さ</span>' +
         '<select class="control" data-path="' + k + '.weight">' +
         '<option value="400">標準</option><option value="700">太字</option><option value="900">極太</option>' +
         '</select></label>' +
-        '<label class="field"><span class="field__label">文字色</span>' +
+        '<label class="field"><span class="field__label field__label--sub">文字色</span>' +
         '<input type="color" class="control control--color" data-path="' + k + '.color"></label>' +
         '</div>'
       );
 
       if (f.lh) {
         parts.push(
-          '<label class="field"><span class="field__label">行間 ' +
+          '<label class="field"><span class="field__label field__label--sub">行間 ' +
           '<output class="field__out" data-out="' + k + '.lineHeight"></output></span>' +
           '<input type="range" class="control control--range" min="1" max="2.6" step="0.05" data-path="' + k + '.lineHeight"></label>'
         );
       }
 
       if (f.isPrice) {
+        /* 「¥」「円」「（税込）」の大きさは価格に連動する。数字だけを触れば
+           まとまって変わることが分からないと戸惑うので、ここで断っておく。
+           カンマ区切りは表記の設定なので「細かい表記」側に置いている。 */
         parts.push(
-          '<label class="check"><input type="checkbox" data-path="price.comma">' +
-          '<span>3桁ごとにカンマを入れる（1,280）</span></label>' +
-          '<p class="field__hint">「¥」「円」「（税込）」は価格の文字サイズに連動して自動調整されます。</p>'
+          '<p class="hint">「¥」「円」「（税込）」は価格の文字サイズに連動して自動調整されます。</p>'
         );
       }
 
@@ -88,9 +90,9 @@ var POPPanelsUI = (function () {
     document.getElementById('text-panels').innerHTML = html;
   }
 
-  /* タブ選択（クラス・aria-selected・roving tabindex を同期。focus指定でフォーカス移動） */
+  /* 文字設定の対象切替（クラス・aria-selected・roving tabindex を同期。focus指定でフォーカス移動） */
   function selectTab(key, focus) {
-    var tabs = document.querySelectorAll('#text-tabs .tab');
+    var tabs = document.querySelectorAll('#text-tabs .seg__btn');
     for (var i = 0; i < tabs.length; i++) {
       var t = tabs[i], on = t.getAttribute('data-tab') === key;
       t.classList.toggle('is-active', on);

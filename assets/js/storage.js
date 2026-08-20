@@ -57,10 +57,18 @@ var POPStorage = (function () {
     } catch (e) { return []; }
   }
 
-  function savePreset(name, state) {
+  /**
+   * デザインを名前を付けて保存する。
+   * @param {Object} [card] 保存時のポップの大きさ（{id,customW,customH}）。
+   *   棚の説明文（「シンプル・44×67mm」）と、読み込み時の大きさ復元に使う。
+   *   省略された古い保存データは大きさを持たないので、読み込んでも大きさは変えない。
+   */
+  function savePreset(name, state, card) {
     if (!ok) return listPresets();
     var arr = listPresets().filter(function (p) { return p.name !== name; });
-    arr.unshift({ name: name, savedAt: new Date().toISOString(), state: state });
+    var entry = { name: name, savedAt: new Date().toISOString(), state: state };
+    if (card) entry.card = card;
+    arr.unshift(entry);
     arr = arr.slice(0, 30);
     try { localStorage.setItem(PRESET_KEY, JSON.stringify(arr)); } catch (e) { /* noop */ }
     return arr;

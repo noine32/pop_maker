@@ -14,449 +14,472 @@
 </head>
 <body>
 
+<!-- ============ 1層目：ヘッダー ============ -->
 <header class="appbar">
   <h1 class="appbar__title">商品ポップメーカー</h1>
+
+  <p class="steps" aria-label="操作の流れ">
+    <span class="step is-current"><span class="step__no">1</span>保存済みから選ぶ</span>
+    <span class="steps__arrow" aria-hidden="true">→</span>
+    <span class="step is-current"><span class="step__no">2</span>文字を入れる</span>
+    <span class="steps__arrow" aria-hidden="true">→</span>
+    <span class="step" id="step-print"><span class="step__no">3</span>印刷する</span>
+  </p>
+
   <div class="appbar__actions">
-    <label class="field field--inline field--compact">
-      <span class="field__label">解像度</span>
-      <select id="export-dpi" class="control">
-        <option value="150">150dpi（軽い）</option>
-        <option value="300" selected>300dpi（印刷推奨）</option>
-        <option value="600">600dpi（高精細）</option>
-      </select>
-    </label>
-    <label class="field field--inline">
-      <span>PNGの対象</span>
-      <select id="export-target" class="control">
-        <option value="sheet">シート（面付け済み）</option>
-        <option value="card">選択中のカードのみ</option>
-      </select>
-    </label>
-    <label class="field field--inline" id="export-allpages-wrap">
-      <input type="checkbox" id="export-allpages">
-      <span>全ページを保存する</span>
-    </label>
-    <button type="button" id="btn-png" class="btn btn--primary">PNG保存</button>
-    <button type="button" id="btn-print" class="btn">印刷</button>
-    <button type="button" id="btn-save-json" class="btn btn--ghost">データ保存</button>
-    <button type="button" id="btn-load-json" class="btn btn--ghost">データ読込</button>
-    <button type="button" id="btn-reset" class="btn btn--ghost">リセット</button>
-    <input type="file" id="file-json" accept="application/json,.json" hidden>
+    <span class="appbar__saved" id="save-state">自動保存済み</span>
+    <button type="button" id="btn-more" class="btn" aria-expanded="false" aria-controls="more-bar">その他 ▾</button>
+    <button type="button" id="btn-png" class="btn btn--outline">画像で保存</button>
+    <button type="button" id="btn-print" class="btn btn--primary btn--lg" data-print>印刷する</button>
   </div>
 </header>
 
+<!-- ============ 2層目：「その他」バー（既定は閉じている） ============ -->
+<div class="morebar" id="more-bar" hidden>
+  <button type="button" id="btn-save-json" class="btn btn--sm">データを書き出す（.json）</button>
+  <button type="button" id="btn-load-json" class="btn btn--sm">データを読み込む</button>
+  <input type="file" id="file-json" accept="application/json,.json" hidden>
+
+  <label class="morebar__field">
+    <span>解像度</span>
+    <select id="export-dpi" class="control control--auto">
+      <option value="150">150dpi（軽い）</option>
+      <option value="300" selected>300dpi（印刷推奨）</option>
+      <option value="600">600dpi（高精細）</option>
+    </select>
+  </label>
+
+  <label class="morebar__field">
+    <span>画像で保存する範囲</span>
+    <select id="export-target" class="control control--auto">
+      <option value="sheet">印刷される紙（面付け済み）</option>
+      <option value="card">選択中のポップのみ</option>
+    </select>
+  </label>
+
+  <label class="check" id="export-allpages-wrap">
+    <input type="checkbox" id="export-allpages">
+    <span>全ページを保存する</span>
+  </label>
+
+  <button type="button" id="btn-reset" class="btn btn--sm btn--ghost">すべてリセット</button>
+</div>
+
+<!-- ============ 3層目：保存済みデザインの棚 ============ -->
+<div class="shelf" id="shelf">
+  <span class="shelf__title">保存済みデザイン</span>
+  <ul class="shelf__list" id="preset-list"></ul>
+  <button type="button" id="btn-preset-save" class="btn btn--accent">＋ 今の見た目を保存</button>
+</div>
+
+<!-- ============ 4層目：3カラム ============ -->
 <main class="layout">
 
-  <!-- ============ カード一覧 ============ -->
+  <!-- ---------- 左：ポップ一覧 ---------- -->
   <section class="cards" aria-labelledby="cards-title">
-    <h2 class="cards__title" id="cards-title">カード</h2>
-    <ul class="cards__list" id="card-list" role="listbox" aria-label="カード一覧" tabindex="0"></ul>
-    <div class="cards__ops">
-      <button type="button" class="btn btn--sm" id="btn-card-add">＋ 追加</button>
-      <button type="button" class="btn btn--sm" id="btn-card-dup">複製</button>
-      <button type="button" class="btn btn--sm btn--ghost" id="btn-card-del">削除</button>
+    <div class="cards__head">
+      <h2 class="cards__title" id="cards-title">ポップ一覧</h2>
+      <span class="cards__count" id="card-count"></span>
     </div>
-    <p class="cards__hint">↑↓ で選択／Alt＋↑↓ で並べ替え／ドラッグでも並べ替えできます</p>
+    <ul class="cards__list" id="card-list" role="listbox" aria-label="ポップ一覧" tabindex="0"></ul>
+    <div class="cards__ops">
+      <button type="button" class="btn btn--accent btn--block" id="btn-card-add">＋ ポップを追加</button>
+      <div class="cards__ops-row">
+        <button type="button" class="btn btn--sm" id="btn-card-dup">複製</button>
+        <button type="button" class="btn btn--sm btn--ghost" id="btn-card-del">削除</button>
+      </div>
+    </div>
+    <p class="cards__hint">ドラッグ、または ↑↓ キーで並べ替えできます（Alt＋↑↓ でも動かせます）</p>
   </section>
 
-  <!-- ============ 操作パネル ============ -->
+  <!-- ---------- 中央：編集パネル（2タブ） ---------- -->
   <section class="panel" aria-label="設定パネル">
+    <div class="paneltabs" role="tablist" aria-label="編集する内容">
+      <button type="button" class="paneltab is-active" id="paneltab-text" role="tab"
+              aria-selected="true" aria-controls="pane-text" data-paneltab="text">文字を入れる</button>
+      <button type="button" class="paneltab" id="paneltab-look" role="tab"
+              aria-selected="false" tabindex="-1" aria-controls="pane-look" data-paneltab="look">デザインを作る</button>
+    </div>
 
-    <!-- 内容 -->
-    <details class="sect" open>
-      <summary class="sect__head">1. 内容を入力</summary>
-      <div class="sect__body">
+    <!-- ===== タブA：文字を入れる ===== -->
+    <div class="pane is-active" id="pane-text" role="tabpanel" aria-labelledby="paneltab-text" data-pane="text">
 
-        <label class="field">
-          <span class="field__label">キャッチコピー<span class="field__hint">（任意）</span></span>
-          <input type="text" class="control" data-path="catch.text" placeholder="例）大人気！本日限り">
-        </label>
+      <label class="field">
+        <span class="field__label field__label--req">商品名</span>
+        <textarea class="control control--lg" rows="2" data-path="name.text" aria-required="true"
+                  placeholder="例）北海道産 生クリーム大福"></textarea>
+      </label>
 
-        <label class="field">
-          <span class="field__label field__label--req">商品名</span>
-          <textarea class="control" rows="2" data-path="name.text" aria-required="true" placeholder="例）北海道産 生クリーム大福"></textarea>
-        </label>
-
-        <div class="grid grid--2">
-          <label class="field">
-            <span class="field__label field__label--req">価格</span>
-            <input type="text" inputmode="decimal" class="control" data-path="price.value" aria-required="true" placeholder="例）980">
-          </label>
-          <label class="field">
-            <span class="field__label">税表記</span>
-            <select class="control" data-path="price.taxNote">
-              <option value="">表示しない</option>
-              <option value="税込">税込</option>
-              <option value="税抜">税抜</option>
-              <option value="本体価格">本体価格</option>
-              <option value="税込価格">税込価格</option>
-            </select>
-          </label>
-        </div>
-
-        <div class="grid grid--3">
-          <label class="field">
-            <span class="field__label">通貨記号</span>
-            <select class="control" data-path="price.prefix">
-              <option value="">なし</option>
-              <option value="¥">¥</option>
-              <option value="＠">＠</option>
-            </select>
-          </label>
-          <label class="field">
-            <span class="field__label">単位</span>
-            <select class="control" data-path="price.suffix">
-              <option value="円">円</option>
-              <option value="円〜">円〜</option>
-              <option value="">なし</option>
-            </select>
-          </label>
-          <label class="field">
-            <span class="field__label">補足<span class="field__hint">（任意）</span></span>
-            <input type="text" class="control" data-path="price.unit" placeholder="例）/ 100g">
-          </label>
-        </div>
-
-        <div class="field">
-          <label class="check">
-            <input type="checkbox" data-path="price.strike.enabled">
-            <span>参考価格を打ち消し線で表示する</span>
-          </label>
-          <input type="text" inputmode="decimal" class="control" data-path="price.strike.value" placeholder="例）1,280（通常価格）">
-        </div>
-
-        <label class="field">
-          <span class="field__label">商品の説明文</span>
-          <textarea class="control" rows="4" data-path="desc.text" placeholder="例）北海道産の生クリームを使用したなめらかな口どけ。冷やしてお召し上がりください。"></textarea>
-        </label>
-
-        <label class="field">
-          <span class="field__label">注記・店名<span class="field__hint">（任意）</span></span>
-          <input type="text" class="control" data-path="note.text" placeholder="例）※数量限定・なくなり次第終了　◯◯ストア">
-        </label>
-      </div>
-    </details>
-
-    <!-- 文字 -->
-    <details class="sect" open>
-      <summary class="sect__head">2. 文字の大きさ・フォント</summary>
-      <div class="sect__body">
-
-        <div class="tabs" role="tablist" id="text-tabs" aria-label="文字設定の項目">
-          <button type="button" class="tab is-active" role="tab" id="tab-name" aria-controls="panel-name" aria-selected="true" data-tab="name">商品名</button>
-          <button type="button" class="tab" role="tab" id="tab-catch" aria-controls="panel-catch" aria-selected="false" tabindex="-1" data-tab="catch">キャッチ</button>
-          <button type="button" class="tab" role="tab" id="tab-price" aria-controls="panel-price" aria-selected="false" tabindex="-1" data-tab="price">価格</button>
-          <button type="button" class="tab" role="tab" id="tab-desc" aria-controls="panel-desc" aria-selected="false" tabindex="-1" data-tab="desc">説明文</button>
-          <button type="button" class="tab" role="tab" id="tab-note" aria-controls="panel-note" aria-selected="false" tabindex="-1" data-tab="note">注記</button>
-        </div>
-
-        <div class="tabpanels" id="text-panels"><!-- JSで生成 --></div>
-
-        <div class="field">
-          <span class="field__label">全体の文字サイズ</span>
-          <div class="btnrow">
-            <button type="button" class="btn btn--sm" data-scale-all="0.9">すべて小さく −</button>
-            <button type="button" class="btn btn--sm" data-scale-all="1.1">すべて大きく ＋</button>
-          </div>
-        </div>
-
-        <label class="check">
-          <input type="checkbox" data-path="layout.autoFit">
-          <span>用紙からはみ出すときは自動で縮小する</span>
-        </label>
-      </div>
-    </details>
-
-    <!-- カードの大きさ -->
-    <details class="sect" open>
-      <summary class="sect__head">3. カードの大きさ</summary>
-      <div class="sect__body">
-        <label class="field">
-          <span class="field__label">プリセット</span>
-          <select id="card-select" class="control" data-doc-path="card.id"></select>
-        </label>
-        <div class="field-row" id="card-custom-size" hidden>
-          <label class="field">
-            <span class="field__label">幅(mm)</span>
-            <input type="number" min="10" max="1000" step="0.5" class="control" data-doc-path="card.customW">
-          </label>
-          <label class="field">
-            <span class="field__label">高さ(mm)</span>
-            <input type="number" min="10" max="1000" step="0.5" class="control" data-doc-path="card.customH">
-          </label>
-        </div>
-        <label class="field field--inline">
-          <input type="checkbox" id="scale-with-card" checked>
-          <span>文字とレイアウトも比例させる</span>
-        </label>
-        <p class="hint">サイズ変更は元の値を書き換えます。元に戻したいときはテンプレートを選び直してください。</p>
-      </div>
-    </details>
-
-    <!-- 印刷シート -->
-    <details class="sect" open>
-      <summary class="sect__head">4. 印刷シート</summary>
-      <div class="sect__body">
-        <label class="field">
-          <span class="field__label">用紙</span>
-          <select id="paper-select" class="control" data-doc-path="sheet.id"></select>
-        </label>
-        <label class="field">
-          <span class="field__label">向き</span>
-          <select class="control" data-doc-path="sheet.orientation">
-            <option value="portrait">縦</option>
-            <option value="landscape">横</option>
+      <div class="field">
+        <span class="field__label field__label--req">価格</span>
+        <div class="priceline">
+          <span class="priceline__mark" id="price-prefix-view" aria-hidden="true">¥</span>
+          <input type="text" inputmode="decimal" class="control control--price" data-path="price.value"
+                 aria-required="true" aria-label="価格" placeholder="例）980">
+          <span class="priceline__unit" id="price-suffix-view" aria-hidden="true">円</span>
+          <select class="control control--auto" data-path="price.taxNote" aria-label="税表記">
+            <option value="税込">税込</option>
+            <option value="税抜">税抜</option>
+            <option value="本体価格">本体価格</option>
+            <option value="税込価格">税込価格</option>
+            <option value="">表示しない</option>
           </select>
-        </label>
-        <div class="field-row" id="custom-size" hidden>
-          <label class="field">
-            <span class="field__label">幅(mm)</span>
-            <input type="number" min="20" max="1000" class="control" data-doc-path="sheet.customW">
-          </label>
-          <label class="field">
-            <span class="field__label">高さ(mm)</span>
-            <input type="number" min="20" max="1000" class="control" data-doc-path="sheet.customH">
-          </label>
         </div>
-        <div class="field-row">
-          <label class="field">
-            <span class="field__label">安全余白(mm)</span>
-            <input type="number" min="0" max="30" step="0.5" class="control" data-doc-path="sheet.margin">
-          </label>
-          <label class="field">
-            <span class="field__label">カード間隔(mm)</span>
-            <input type="number" min="0" max="20" step="0.5" class="control" data-doc-path="sheet.gap">
-          </label>
-        </div>
-        <label class="field field--inline">
-          <input type="checkbox" data-doc-path="sheet.allowRotate">
-          <span>90°回して枚数が増えるなら回す</span>
-        </label>
-        <label class="field field--inline">
-          <input type="checkbox" data-doc-path="sheet.center">
-          <span>用紙の中央に寄せる</span>
-        </label>
-        <label class="field field--inline">
-          <input type="checkbox" data-doc-path="sheet.cutLine">
-          <span>カット線を入れる</span>
-        </label>
-        <p class="hint">安全余白を 0mm にすると枚数は増えますが、フチなし印刷に対応したプリンタ以外では端が欠けます。</p>
-      </div>
-    </details>
-
-    <!-- レイアウト -->
-    <details class="sect">
-      <summary class="sect__head">5. レイアウト</summary>
-      <div class="sect__body">
-        <div class="grid grid--2">
-          <label class="field">
-            <span class="field__label">文字揃え</span>
-            <select class="control" data-path="layout.align">
-              <option value="center">中央揃え</option>
-              <option value="left">左揃え</option>
-              <option value="right">右揃え</option>
-            </select>
-          </label>
-          <label class="field">
-            <span class="field__label">縦の配置</span>
-            <select class="control" data-path="layout.valign">
-              <option value="center">中央</option>
-              <option value="top">上寄せ</option>
-              <option value="space">上下いっぱいに広げる</option>
-            </select>
-          </label>
-        </div>
-
-        <label class="field">
-          <span class="field__label">余白 <output class="field__out" data-out="layout.padding"></output> mm</span>
-          <input type="range" min="0" max="40" step="1" class="control control--range" data-path="layout.padding">
-        </label>
-
-        <label class="field">
-          <span class="field__label">要素の間隔 <output class="field__out" data-out="layout.gap"></output> mm</span>
-          <input type="range" min="0" max="30" step="1" class="control control--range" data-path="layout.gap">
-        </label>
-
         <label class="check">
-          <input type="checkbox" data-path="layout.divider">
-          <span>商品名と価格の間に区切り線を入れる</span>
+          <input type="checkbox" data-path="price.strike.enabled">
+          <span>通常価格を打ち消し線で併記する</span>
         </label>
+        <input type="text" inputmode="decimal" class="control" id="price-strike-value"
+               data-path="price.strike.value" aria-label="通常価格" placeholder="例）1,280（通常価格）" hidden>
       </div>
-    </details>
 
-    <!-- デザイン -->
-    <details class="sect">
-      <summary class="sect__head">6. デザイン・色</summary>
-      <div class="sect__body">
-        <div class="field">
-          <span class="field__label">テンプレート</span>
-          <div class="templates" id="template-list"></div>
-          <button type="button" class="btn btn--sm" id="btn-apply-design">このデザインを全カードに適用</button>
-          <p class="field__hint">※テンプレートを選ぶと色・フォント・枠線がまとめて変わります（文章はそのまま）</p>
-        </div>
+      <label class="field">
+        <span class="field__label">キャッチコピー<span class="field__hint">商品名の上に小さく入ります</span></span>
+        <input type="text" class="control control--lg" data-path="catch.text" placeholder="例）大人気！本日限り">
+      </label>
 
-        <div class="grid grid--2">
-          <label class="field">
-            <span class="field__label">背景色</span>
-            <input type="color" class="control control--color" data-path="design.bg">
-          </label>
-          <label class="field">
-            <span class="field__label">アクセント色</span>
-            <input type="color" class="control control--color" data-path="design.accent">
-          </label>
-        </div>
+      <label class="field">
+        <span class="field__label">説明文</span>
+        <textarea class="control control--lg" rows="3" data-path="desc.text"
+                  placeholder="例）北海道産の生クリームを使用したなめらかな口どけ。"></textarea>
+      </label>
 
-        <div class="grid grid--3">
-          <label class="field">
-            <span class="field__label">枠線</span>
-            <select class="control" data-path="design.border.style">
-              <option value="none">なし</option>
-              <option value="solid">実線</option>
-              <option value="double">二重線</option>
-              <option value="dashed">破線</option>
-              <option value="round">角丸</option>
-            </select>
-          </label>
-          <label class="field">
-            <span class="field__label">太さ <output class="field__out" data-out="design.border.width"></output> mm</span>
-            <input type="range" min="0.2" max="8" step="0.2" class="control control--range" data-path="design.border.width">
-          </label>
-          <label class="field">
-            <span class="field__label">枠線の色</span>
-            <input type="color" class="control control--color" data-path="design.border.color">
-          </label>
-        </div>
+      <label class="field">
+        <span class="field__label">注記・店名</span>
+        <input type="text" class="control" data-path="note.text" placeholder="例）※数量限定・なくなり次第終了　◯◯ストア">
+      </label>
 
-        <label class="field">
-          <span class="field__label">ヘッダー帯</span>
-          <select class="control" data-path="design.band">
-            <option value="none">なし</option>
-            <option value="top">上に帯を入れる</option>
-            <option value="behindName">商品名の背景を塗る</option>
-          </select>
-        </label>
-
-        <hr class="sep">
-
-        <label class="check">
-          <input type="checkbox" data-path="badge.enabled">
-          <span>バッジを表示する</span>
-        </label>
-        <div class="grid grid--2">
-          <label class="field">
-            <span class="field__label">バッジの文字</span>
-            <input type="text" class="control" data-path="badge.text" placeholder="例）NEW / おすすめ / 半額">
-          </label>
-          <label class="field">
-            <span class="field__label">スタイル</span>
-            <select class="control" data-path="badge.style">
-              <option value="chip">角丸タグ（上部）</option>
-              <option value="ribbon">リボン（右上・斜め）</option>
-              <option value="circle">丸印（右上）</option>
-            </select>
-          </label>
-        </div>
-        <div class="grid grid--3">
-          <label class="field">
-            <span class="field__label">背景</span>
-            <input type="color" class="control control--color" data-path="badge.bg">
-          </label>
-          <label class="field">
-            <span class="field__label">文字色</span>
-            <input type="color" class="control control--color" data-path="badge.color">
-          </label>
-          <label class="field">
-            <span class="field__label">大きさ <output class="field__out" data-out="badge.size"></output> pt</span>
-            <input type="range" min="8" max="80" step="1" class="control control--range" data-path="badge.size">
-          </label>
-        </div>
-      </div>
-    </details>
-
-    <!-- 画像 -->
-    <details class="sect">
-      <summary class="sect__head">7. 画像（写真・ロゴ）</summary>
-      <div class="sect__body">
-        <div class="btnrow">
-          <button type="button" class="btn btn--primary" id="btn-image-add">画像を追加 / 差し替え</button>
-          <button type="button" class="btn btn--ghost" id="btn-image-del">削除</button>
-        </div>
-        <input type="file" id="file-image" accept="image/*" hidden>
-
-        <div id="image-controls" hidden>
-          <p class="field__hint">プレビュー上でドラッグ＝移動、四隅をドラッグ＝拡大縮小。位置X/Y・幅の数値でも調整できます。</p>
-          <label class="field">
-            <span class="field__label">幅 <output class="field__out" data-out="image.wMm"></output> mm</span>
-            <input type="range" min="10" max="600" step="1" class="control control--range" data-path="image.wMm">
-          </label>
-          <div class="grid grid--2">
+      <details class="fold">
+        <summary class="fold__head">細かい表記（通貨記号・単位・バッジ）</summary>
+        <div class="fold__body">
+          <div class="grid grid--3">
             <label class="field">
-              <span class="field__label">位置X（mm）</span>
-              <input type="number" min="-600" max="600" step="1" class="control" data-path="image.xMm">
-            </label>
-            <label class="field">
-              <span class="field__label">位置Y（mm）</span>
-              <input type="number" min="-600" max="600" step="1" class="control" data-path="image.yMm">
-            </label>
-          </div>
-          <div class="grid grid--2">
-            <label class="field">
-              <span class="field__label">重ね順</span>
-              <select class="control" data-path="image.layer">
-                <option value="back">文字の後ろ（背景）</option>
-                <option value="front">文字の前（前面）</option>
+              <span class="field__label field__label--sub">通貨記号</span>
+              <select class="control" data-path="price.prefix">
+                <option value="">なし</option>
+                <option value="¥">¥</option>
+                <option value="＠">＠</option>
               </select>
             </label>
             <label class="field">
-              <span class="field__label">透明度 <output class="field__out" data-out="image.opacity"></output></span>
-              <input type="range" min="0.1" max="1" step="0.05" class="control control--range" data-path="image.opacity">
+              <span class="field__label field__label--sub">単位</span>
+              <select class="control" data-path="price.suffix">
+                <option value="円">円</option>
+                <option value="円〜">円〜</option>
+                <option value="">なし</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="field__label field__label--sub">補足</span>
+              <input type="text" class="control" data-path="price.unit" placeholder="/ 100g">
+            </label>
+          </div>
+
+          <label class="check">
+            <input type="checkbox" data-path="price.comma">
+            <span>3桁ごとにカンマを入れる（1,280）</span>
+          </label>
+
+          <label class="check">
+            <input type="checkbox" data-path="badge.enabled">
+            <span>バッジ（NEW・おすすめ など）を表示する</span>
+          </label>
+
+          <div id="badge-fields" hidden>
+            <div class="grid grid--2">
+              <label class="field">
+                <span class="field__label field__label--sub">バッジの文字</span>
+                <input type="text" class="control" data-path="badge.text" placeholder="例）NEW / おすすめ / 半額">
+              </label>
+              <label class="field">
+                <span class="field__label field__label--sub">スタイル</span>
+                <select class="control" data-path="badge.style">
+                  <option value="chip">角丸タグ（上部）</option>
+                  <option value="ribbon">リボン（右上・斜め）</option>
+                  <option value="circle">丸印（右上）</option>
+                </select>
+              </label>
+            </div>
+            <div class="grid grid--3">
+              <label class="field">
+                <span class="field__label field__label--sub">背景</span>
+                <input type="color" class="control control--color" data-path="badge.bg">
+              </label>
+              <label class="field">
+                <span class="field__label field__label--sub">文字色</span>
+                <input type="color" class="control control--color" data-path="badge.color">
+              </label>
+              <label class="field">
+                <span class="field__label field__label--sub">大きさ <output class="field__out" data-out="badge.size"></output> pt</span>
+                <input type="range" min="8" max="80" step="1" class="control control--range" data-path="badge.size">
+              </label>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <div class="nextbox">
+        <span class="nextbox__text">この文字を入れたまま、次のポップを作りますか？</span>
+        <button type="button" class="btn btn--accent btn--sm" id="btn-dup-continue">複製して続ける</button>
+      </div>
+    </div>
+
+    <!-- ===== タブB：デザインを作る ===== -->
+    <div class="pane" id="pane-look" role="tabpanel" aria-labelledby="paneltab-look" data-pane="look" hidden>
+
+      <div class="field">
+        <span class="field__label">テンプレート</span>
+        <div class="templates" id="template-list"></div>
+        <button type="button" class="btn btn--sm btn--start" id="btn-apply-design">この見た目をすべてのポップに適用</button>
+      </div>
+
+      <details class="fold" open>
+        <summary class="fold__head">文字（フォント・サイズ・色）</summary>
+        <div class="fold__body">
+          <div class="seg" role="tablist" id="text-tabs" aria-label="文字設定の項目">
+            <button type="button" class="seg__btn is-active" role="tab" id="tab-name"  aria-controls="panel-name"  aria-selected="true"  data-tab="name">商品名</button>
+            <button type="button" class="seg__btn" role="tab" id="tab-catch" aria-controls="panel-catch" aria-selected="false" tabindex="-1" data-tab="catch">キャッチ</button>
+            <button type="button" class="seg__btn" role="tab" id="tab-price" aria-controls="panel-price" aria-selected="false" tabindex="-1" data-tab="price">価格</button>
+            <button type="button" class="seg__btn" role="tab" id="tab-desc"  aria-controls="panel-desc"  aria-selected="false" tabindex="-1" data-tab="desc">説明文</button>
+            <button type="button" class="seg__btn" role="tab" id="tab-note"  aria-controls="panel-note"  aria-selected="false" tabindex="-1" data-tab="note">注記</button>
+          </div>
+
+          <div class="tabpanels" id="text-panels"><!-- JSで生成 --></div>
+
+          <div class="sizerow">
+            <span class="field__label field__label--sub">全体を</span>
+            <button type="button" class="btn btn--sm" data-scale-all="0.9">小さく −</button>
+            <button type="button" class="btn btn--sm" data-scale-all="1.1">大きく ＋</button>
+            <label class="check check--end">
+              <input type="checkbox" data-path="layout.autoFit">
+              <span>自動で縮小</span>
             </label>
           </div>
         </div>
-      </div>
-    </details>
+      </details>
 
-    <!-- 保存 -->
-    <details class="sect">
-      <summary class="sect__head">8. デザインの保存</summary>
-      <div class="sect__body">
-        <div class="field">
-          <span class="field__label">名前を付けて保存</span>
+      <details class="fold">
+        <summary class="fold__head">配置・枠線・背景色</summary>
+        <div class="fold__body">
+          <div class="grid grid--2">
+            <label class="field">
+              <span class="field__label field__label--sub">文字揃え</span>
+              <select class="control" data-path="layout.align">
+                <option value="center">中央揃え</option>
+                <option value="left">左揃え</option>
+                <option value="right">右揃え</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="field__label field__label--sub">縦の配置</span>
+              <select class="control" data-path="layout.valign">
+                <option value="center">中央</option>
+                <option value="top">上寄せ</option>
+                <option value="space">上下いっぱい</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="field__label field__label--sub">背景色</span>
+              <input type="color" class="control control--color" data-path="design.bg">
+            </label>
+            <label class="field">
+              <span class="field__label field__label--sub">アクセント色</span>
+              <input type="color" class="control control--color" data-path="design.accent">
+            </label>
+          </div>
+
+          <div class="grid grid--3">
+            <label class="field">
+              <span class="field__label field__label--sub">枠線</span>
+              <select class="control" data-path="design.border.style">
+                <option value="none">なし</option>
+                <option value="solid">実線</option>
+                <option value="double">二重線</option>
+                <option value="dashed">破線</option>
+                <option value="round">角丸</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="field__label field__label--sub">太さ mm</span>
+              <input type="number" min="0.2" max="8" step="0.1" class="control" data-path="design.border.width">
+            </label>
+            <label class="field">
+              <span class="field__label field__label--sub">枠線の色</span>
+              <input type="color" class="control control--color" data-path="design.border.color">
+            </label>
+          </div>
+
+          <div class="grid grid--2">
+            <label class="field">
+              <span class="field__label field__label--sub">余白 <output class="field__out" data-out="layout.padding"></output> mm</span>
+              <input type="range" min="0" max="40" step="1" class="control control--range" data-path="layout.padding">
+            </label>
+            <label class="field">
+              <span class="field__label field__label--sub">要素の間隔 <output class="field__out" data-out="layout.gap"></output> mm</span>
+              <input type="range" min="0" max="30" step="1" class="control control--range" data-path="layout.gap">
+            </label>
+          </div>
+
+          <label class="field">
+            <span class="field__label field__label--sub">ヘッダー帯</span>
+            <select class="control" data-path="design.band">
+              <option value="none">なし</option>
+              <option value="top">上に帯を入れる</option>
+              <option value="behindName">商品名の背景を塗る</option>
+            </select>
+          </label>
+
+          <label class="check">
+            <input type="checkbox" data-path="layout.divider">
+            <span>商品名と価格の間に区切り線を入れる</span>
+          </label>
+        </div>
+      </details>
+
+      <details class="fold">
+        <summary class="fold__head">ポップの大きさ・印刷する紙</summary>
+        <div class="fold__body">
+          <label class="field">
+            <span class="field__label field__label--sub">ポップの大きさ</span>
+            <select id="card-select" class="control" data-doc-path="card.id"></select>
+          </label>
+          <div class="grid grid--2" id="card-custom-size" hidden>
+            <label class="field">
+              <span class="field__label field__label--sub">幅 mm</span>
+              <input type="number" min="10" max="1000" step="0.5" class="control" data-doc-path="card.customW">
+            </label>
+            <label class="field">
+              <span class="field__label field__label--sub">高さ mm</span>
+              <input type="number" min="10" max="1000" step="0.5" class="control" data-doc-path="card.customH">
+            </label>
+          </div>
+          <label class="check">
+            <input type="checkbox" id="scale-with-card" checked>
+            <span>文字とレイアウトも比例させる</span>
+          </label>
+
+          <hr class="sep">
+
+          <div class="grid grid--2">
+            <label class="field">
+              <span class="field__label field__label--sub">印刷する紙</span>
+              <select id="paper-select" class="control" data-doc-path="sheet.id"></select>
+            </label>
+            <label class="field">
+              <span class="field__label field__label--sub">向き</span>
+              <select class="control" data-doc-path="sheet.orientation">
+                <option value="portrait">縦</option>
+                <option value="landscape">横</option>
+              </select>
+            </label>
+          </div>
+          <div class="grid grid--2" id="custom-size" hidden>
+            <label class="field">
+              <span class="field__label field__label--sub">紙の幅 mm</span>
+              <input type="number" min="20" max="1000" class="control" data-doc-path="sheet.customW">
+            </label>
+            <label class="field">
+              <span class="field__label field__label--sub">紙の高さ mm</span>
+              <input type="number" min="20" max="1000" class="control" data-doc-path="sheet.customH">
+            </label>
+          </div>
+          <div class="grid grid--2">
+            <label class="field">
+              <span class="field__label field__label--sub">安全余白 mm</span>
+              <input type="number" min="0" max="30" step="0.5" class="control" data-doc-path="sheet.margin">
+            </label>
+            <label class="field">
+              <span class="field__label field__label--sub">ポップの間隔 mm</span>
+              <input type="number" min="0" max="20" step="0.5" class="control" data-doc-path="sheet.gap">
+            </label>
+          </div>
+          <label class="check">
+            <input type="checkbox" data-doc-path="sheet.allowRotate">
+            <span>90°回して枚数が増えるなら回す</span>
+          </label>
+          <label class="check">
+            <input type="checkbox" data-doc-path="sheet.center">
+            <span>紙の中央に寄せる</span>
+          </label>
+          <label class="check">
+            <input type="checkbox" data-doc-path="sheet.cutLine">
+            <span>カット線を入れる</span>
+          </label>
+          <p class="hint">安全余白を 0mm にすると枚数は増えますが、フチなし印刷に対応したプリンタ以外では端が欠けます。</p>
+        </div>
+      </details>
+
+      <details class="fold">
+        <summary class="fold__head">画像（写真・ロゴ）</summary>
+        <div class="fold__body">
           <div class="btnrow">
-            <input type="text" class="control" id="preset-name" placeholder="例）お菓子コーナー用">
-            <button type="button" class="btn" id="btn-preset-save">保存</button>
+            <button type="button" class="btn btn--primary btn--sm" id="btn-image-add">画像を選ぶ</button>
+            <button type="button" class="btn btn--sm btn--ghost" id="btn-image-del">削除</button>
+          </div>
+          <input type="file" id="file-image" accept="image/*" hidden>
+
+          <div id="image-controls" hidden>
+            <p class="hint">プレビュー上でドラッグ＝移動、四隅をドラッグ＝拡大縮小。位置X/Y・幅の数値でも調整できます。</p>
+            <label class="field">
+              <span class="field__label field__label--sub">幅 <output class="field__out" data-out="image.wMm"></output> mm</span>
+              <input type="range" min="10" max="600" step="1" class="control control--range" data-path="image.wMm">
+            </label>
+            <div class="grid grid--2">
+              <label class="field">
+                <span class="field__label field__label--sub">位置X（mm）</span>
+                <input type="number" min="-600" max="600" step="1" class="control" data-path="image.xMm">
+              </label>
+              <label class="field">
+                <span class="field__label field__label--sub">位置Y（mm）</span>
+                <input type="number" min="-600" max="600" step="1" class="control" data-path="image.yMm">
+              </label>
+            </div>
+            <div class="grid grid--2">
+              <label class="field">
+                <span class="field__label field__label--sub">重ね順</span>
+                <select class="control" data-path="image.layer">
+                  <option value="back">文字の後ろ（背景）</option>
+                  <option value="front">文字の前（前面）</option>
+                </select>
+              </label>
+              <label class="field">
+                <span class="field__label field__label--sub">透明度 <output class="field__out" data-out="image.opacity"></output></span>
+                <input type="range" min="0.1" max="1" step="0.05" class="control control--range" data-path="image.opacity">
+              </label>
+            </div>
           </div>
         </div>
-        <div class="field">
-          <span class="field__label">保存済み</span>
-          <ul class="presets" id="preset-list"></ul>
-        </div>
-        <p class="field__hint">保存先はこのブラウザ内（localStorage）です。編集内容は自動保存され、次回開いたときに復元されます。</p>
-      </div>
-    </details>
+      </details>
+    </div>
   </section>
 
-  <!-- ============ プレビュー ============ -->
+  <!-- ---------- 右：プレビュー ---------- -->
   <section class="preview" aria-label="プレビュー">
-    <div class="preview__bar">
-      <span class="preview__meta" id="preview-meta"></span>
-      <span class="preview__status" id="status" role="status" aria-live="polite"></span>
-    </div>
-    <div class="preview-tabs" role="tablist" aria-label="プレビューの表示">
-      <button type="button" class="ptab is-active" id="ptab-card"
-              role="tab" aria-selected="true" data-preview="card">カード</button>
-      <button type="button" class="ptab" id="ptab-sheet"
-              role="tab" aria-selected="false" data-preview="sheet">シート</button>
+    <div class="preview__top">
+      <div class="viewtoggle" role="tablist" aria-label="プレビューの表示">
+        <button type="button" class="viewtoggle__btn is-active" id="ptab-card"
+                role="tab" aria-selected="true" data-preview="card">ポップ1枚</button>
+        <button type="button" class="viewtoggle__btn" id="ptab-sheet"
+                role="tab" aria-selected="false" data-preview="sheet">印刷される紙</button>
+      </div>
       <span class="preview-pager" id="preview-pager" hidden>
         <button type="button" class="btn btn--sm" id="btn-page-prev" aria-label="前のページ">◀</button>
         <span id="page-label">1 / 1</span>
         <button type="button" class="btn btn--sm" id="btn-page-next" aria-label="次のページ">▶</button>
       </span>
+      <span class="preview__meta" id="preview-meta"></span>
     </div>
+
     <div class="preview__stage" id="preview-stage">
       <canvas id="canvas" class="preview__canvas" role="img" aria-label="商品ポップのプレビュー"></canvas>
     </div>
-    <p class="preview__note">プレビューは実際の印刷仕上がりと同じレイアウトです。</p>
+
+    <div class="printbar">
+      <span class="printbar__summary" id="print-summary"></span>
+      <span class="printbar__note">プリンタ設定は「実際のサイズ（100%）」を選んでください</span>
+      <span class="printbar__status" id="status" role="status" aria-live="polite"></span>
+      <button type="button" class="btn btn--primary" id="btn-print-bar" data-print>印刷する</button>
+    </div>
   </section>
 </main>
 
@@ -480,7 +503,8 @@
    （配信元が同じでも資産ごとにキャッシュの有効期限が独立しているため）。その状態だと
    画面が黙って動かなくなり、原因も分からないので、ここで必要な部品が揃っているか確かめ、
    揃っていなければ再読み込みを促す。この検査を index.html に置いているのは、
-   利用者が実際に取りに行くこのファイルだけは必ず新しい版が実行されるため。 */
+   利用者が実際に取りに行くこのファイルだけは必ず新しい版が実行されるため。
+   関数名は「今の版にしか無いもの」を選ぶ（古いキャッシュを確実に見抜くため）。 */
 (function () {
   'use strict';
   var need = [
@@ -490,7 +514,7 @@
     ['POPImposition','imposition.js',  'computeLayout'],
     ['POPRenderer',  'renderer.js',    'draw'],
     ['POPSheetView', 'sheet-view.js',  'drawSheet'],
-    ['POPDoc',       'doc.js',         'sampleDoc'],
+    ['POPDoc',       'doc.js',         'designOf'],
     ['POPStorage',   'storage.js',     'loadLegacyAuto'],
     ['POPImageTool', 'image-tool.js',  'isSettled'],
     ['POPPresetUI',  'preset-ui.js',   'render'],

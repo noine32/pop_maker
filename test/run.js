@@ -668,6 +668,72 @@ test('applyDesignToAll: 見た目だけ配り、文章と画像は触らない',
   assert.strictEqual(d.cards[1].image.src, 'data:x');
 });
 
+test('applyDesignTo: 見た目だけ写し、文章・価格・画像・バッジ文言は残る', function () {
+  var src = POPPresets.defaultCardState();
+  src.template = 'sale';
+  src.design.bg = '#e60012';
+  src.design.border.width = 3;
+  src.layout.align = 'left';
+  src.name.font = 'dela';
+  src.name.size = 88;
+  src.badge.enabled = true;
+  src.badge.bg = '#ffe100';
+  src.badge.text = '保存時の文言';
+  src.name.text = '保存時の商品名';
+
+  var dst = POPPresets.defaultCardState();
+  dst.name.text = '編集中の商品名';
+  dst.price.value = '980';
+  dst.badge.text = '編集中のバッジ';
+  dst.image = { src: 'data:x', xMm: 1, yMm: 2, wMm: 3, aspect: 1, opacity: 1, layer: 'back' };
+
+  POPDoc.applyDesignTo(dst, src);
+
+  /* 見た目は写る */
+  assert.strictEqual(dst.template, 'sale');
+  assert.strictEqual(dst.design.bg, '#e60012');
+  assert.strictEqual(dst.design.border.width, 3);
+  assert.strictEqual(dst.layout.align, 'left');
+  assert.strictEqual(dst.name.font, 'dela');
+  assert.strictEqual(dst.name.size, 88);
+  assert.strictEqual(dst.badge.enabled, true);
+  assert.strictEqual(dst.badge.bg, '#ffe100');
+
+  /* 中身は残る */
+  assert.strictEqual(dst.name.text, '編集中の商品名');
+  assert.strictEqual(dst.price.value, '980');
+  assert.strictEqual(dst.badge.text, '編集中のバッジ');
+  assert.strictEqual(dst.image.src, 'data:x');
+});
+
+test('applyDesignTo: design/layout は複製され、後から書き換えても元へ波及しない', function () {
+  var src = POPPresets.defaultCardState();
+  var dst = POPDoc.applyDesignTo(POPPresets.defaultCardState(), src);
+  dst.design.bg = '#000000';
+  dst.layout.padding = 99;
+  assert.notStrictEqual(src.design.bg, '#000000');
+  assert.notStrictEqual(src.layout.padding, 99);
+});
+
+test('designOf: 棚に保存するのは見た目だけで、文章と画像を持たない', function () {
+  var card = POPPresets.sampleState();
+  delete card.paper;
+  card.template = 'dark';
+  card.design.bg = '#1f2933';
+  card.image = { src: 'data:x', xMm: 0, yMm: 0, wMm: 10, aspect: 1, opacity: 1, layer: 'back' };
+
+  var saved = POPDoc.designOf(card);
+
+  assert.strictEqual(saved.template, 'dark');
+  assert.strictEqual(saved.design.bg, '#1f2933');
+  assert.strictEqual(saved.name.text, '');
+  assert.strictEqual(saved.price.value, '');
+  assert.strictEqual(saved.desc.text, '');
+  assert.strictEqual(saved.image.src, '');
+  /* 元のカードは触らない */
+  assert.strictEqual(card.name.text, '北海道産 生クリーム大福');
+});
+
 /* ---------- POPSheetView（セル配置の幾何） ---------- */
 function docFor(cardW, cardH, sheetId, margin) {
   var d = POPDoc.defaultDoc();

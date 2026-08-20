@@ -174,6 +174,32 @@ var POPDoc = (function () {
   var DESIGN_TEXT_PROPS = ['font', 'size', 'weight', 'color', 'lineHeight'];
   var DESIGN_BADGE_PROPS = ['enabled', 'style', 'bg', 'color', 'size'];
 
+  /** 1枚ぶんの「見た目」だけを dst へ写す。文章・価格・バッジ文言・画像は触らない。 */
+  function applyDesignTo(dst, src) {
+    if (!dst || !src) return dst;
+    if (src.template !== undefined) dst.template = src.template;
+    if (src.design) dst.design = clone(src.design);
+    if (src.layout) dst.layout = clone(src.layout);
+    DESIGN_TEXT_KEYS.forEach(function (k) {
+      if (!src[k] || !dst[k]) return;
+      DESIGN_TEXT_PROPS.forEach(function (p) {
+        if (src[k][p] !== undefined) dst[k][p] = src[k][p];
+      });
+    });
+    if (src.badge && dst.badge) {
+      DESIGN_BADGE_PROPS.forEach(function (p) {
+        if (src.badge[p] !== undefined) dst.badge[p] = src.badge[p];
+      });
+    }
+    return dst;
+  }
+
+  /* 「保存済みデザイン」に置くための1枚ぶんの状態。見た目だけを既定値に重ねたもので、
+     文章・画像は含めない（棚のデザインを当てても文章が消えないようにするため）。 */
+  function designOf(card) {
+    return applyDesignTo(POPPresets.defaultCardState(), card);
+  }
+
   /** @returns {number} 上書きしたカード枚数（自分自身を除く） */
   function applyDesignToAll(doc, index) {
     var src = doc.cards[index];
@@ -181,20 +207,7 @@ var POPDoc = (function () {
     var count = 0;
     doc.cards.forEach(function (dst, i) {
       if (i === index) return;
-      dst.template = src.template;
-      dst.design = clone(src.design);
-      dst.layout = clone(src.layout);
-      DESIGN_TEXT_KEYS.forEach(function (k) {
-        if (!src[k] || !dst[k]) return;
-        DESIGN_TEXT_PROPS.forEach(function (p) {
-          if (src[k][p] !== undefined) dst[k][p] = src[k][p];
-        });
-      });
-      if (src.badge && dst.badge) {
-        DESIGN_BADGE_PROPS.forEach(function (p) {
-          if (src.badge[p] !== undefined) dst.badge[p] = src.badge[p];
-        });
-      }
+      applyDesignTo(dst, src);
       count++;
     });
     return count;
@@ -212,6 +225,8 @@ var POPDoc = (function () {
     duplicateCard: duplicateCard,
     removeCard: removeCard,
     moveCard: moveCard,
+    applyDesignTo: applyDesignTo,
+    designOf: designOf,
     applyDesignToAll: applyDesignToAll
   };
 })();
