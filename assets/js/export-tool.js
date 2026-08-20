@@ -6,7 +6,7 @@
 var POPExport = (function () {
   'use strict';
 
-  var cfg = null;   /* { getDoc, getCard, getCardSize, getPageIndex, setStatus } */
+  var cfg = null;   /* { getDoc, getCard, getCardSize, getPageIndex, setStatus, onBeforePrint } */
 
   /* 出力中フラグ。連打で iframe と blob 生成の流れが並行するのを防ぐ。
      何らかの経路で解除されなかったときに永久に押せなくならないよう、
@@ -90,7 +90,7 @@ var POPExport = (function () {
     }
 
     var pages = POPSheetView.pagesOf(doc);
-    if (pages <= 0) { cfg.setStatus('カードがシートより大きいため書き出せません', true); setBusy(false); return; }
+    if (pages <= 0) { cfg.setStatus('ポップが紙より大きいため書き出せません', true); setBusy(false); return; }
 
     cfg.setStatus('画像を作成中…');
     POPFonts.ensureAll(allUsedFonts()).then(function () {
@@ -124,10 +124,13 @@ var POPExport = (function () {
      ページ canvas は1枚ずつ作って参照を捨てる。 */
   function printSheets() {
     if (busy) return;
+    /* 何がどう刷られるかを見せてからダイアログを出す（面付けの結果は
+       「印刷される紙」表示でしか分からないため）。 */
+    if (cfg.onBeforePrint) cfg.onBeforePrint();
     setBusy(true);
     var doc = cfg.getDoc();
     var pages = POPSheetView.pagesOf(doc);
-    if (pages <= 0) { cfg.setStatus('カードがシートより大きいため印刷できません', true); setBusy(false); return; }
+    if (pages <= 0) { cfg.setStatus('ポップが紙より大きいため印刷できません', true); setBusy(false); return; }
     if (pages > PAGES_CONFIRM_THRESHOLD &&
         !window.confirm(pages + 'ページを印刷します。時間とメモリを消費しますが続けますか？')) {
       setBusy(false);
@@ -214,7 +217,11 @@ var POPExport = (function () {
   function init(o) {
     cfg = o;
     document.getElementById('btn-png').addEventListener('click', png);
-    document.getElementById('btn-print').addEventListener('click', printSheets);
+    /* 「印刷する」はヘッダーとプレビュー下の確認バーの2か所にある */
+    var printButtons = document.querySelectorAll('[data-print]');
+    for (var i = 0; i < printButtons.length; i++) {
+      printButtons[i].addEventListener('click', printSheets);
+    }
     document.getElementById('export-target').addEventListener('change', function (ev) {
       document.getElementById('export-allpages-wrap').hidden = ev.target.value !== 'sheet';
     });

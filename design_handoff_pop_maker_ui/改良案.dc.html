@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#eceef1;color:#1f2328;font-size:14px;line-height:1.6;font-family:"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic","Meiryo","Noto Sans JP",system-ui,-apple-system,sans-serif}
+*{box-sizing:border-box}
+a{color:#0b6bcb;text-decoration:none}a:hover{color:#0a5aab;text-decoration:underline}
+summary{list-style:none}summary::-webkit-details-marker{display:none}
+input,select,textarea,button{font-family:inherit}
+</style>
+</helmet>
+<div style="min-height:100vh;background:#eceef1;display:flex;flex-direction:column">
+
+  <header style="display:flex;align-items:center;gap:20px;padding:10px 20px;background:#fff;border-bottom:1px solid #d7dbe0">
+    <h1 style="margin:0;font-size:15px;font-weight:700;letter-spacing:.02em;white-space:nowrap">商品ポップメーカー</h1>
+    <div style="display:flex;align-items:center;gap:10px;font-size:12px;color:#616a75;white-space:nowrap;overflow:hidden">
+      <span style="display:flex;align-items:center;gap:6px;color:#1f2328;font-weight:700"><span style="display:inline-flex;width:18px;height:18px;border-radius:50%;background:#0b6bcb;color:#fff;align-items:center;justify-content:center;font-size:11px">1</span>保存済みから選ぶ</span>
+      <span style="color:#b6bcc4">→</span>
+      <span style="display:flex;align-items:center;gap:6px;color:#1f2328;font-weight:700"><span style="display:inline-flex;width:18px;height:18px;border-radius:50%;background:#0b6bcb;color:#fff;align-items:center;justify-content:center;font-size:11px">2</span>文字を入れる</span>
+      <span style="color:#b6bcc4">→</span>
+      <span style="display:flex;align-items:center;gap:6px"><span style="display:inline-flex;width:18px;height:18px;border-radius:50%;background:#e3e6ea;color:#616a75;align-items:center;justify-content:center;font-size:11px">3</span>印刷する</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-left:auto;flex-shrink:0">
+      <span style="font-size:12px;color:#616a75;white-space:nowrap">{{ savedLabel }}</span>
+      <button type="button" onClick="{{ toggleMore }}" style="font-size:13px;font-weight:600;color:#3d444d;background:#fff;border:1px solid #d7dbe0;border-radius:8px;padding:8px 12px;cursor:pointer;white-space:nowrap" style-hover="background:#f4f5f7">その他 ▾</button>
+      <button type="button" style="font-size:13px;font-weight:600;color:#1f2328;background:#fff;border:1px solid #d7dbe0;border-radius:8px;padding:8px 14px;cursor:pointer;white-space:nowrap" style-hover="background:#f4f5f7;border-color:#0b6bcb">画像で保存</button>
+      <button type="button" style="font-size:15px;font-weight:700;color:#fff;background:#0b6bcb;border:1px solid #0b6bcb;border-radius:8px;padding:8px 22px;cursor:pointer;white-space:nowrap" style-hover="background:#0a5aab">印刷する</button>
+    </div>
+  </header>
+
+  <sc-if value="{{ moreOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;justify-content:flex-end;gap:8px;padding:10px 20px;background:#f7f8fa;border-bottom:1px solid #d7dbe0">
+      <button type="button" style="font-size:13px;font-weight:600;color:#3d444d;background:#fff;border:1px solid #d7dbe0;border-radius:8px;padding:6px 12px;cursor:pointer">データを書き出す（.json）</button>
+      <button type="button" style="font-size:13px;font-weight:600;color:#3d444d;background:#fff;border:1px solid #d7dbe0;border-radius:8px;padding:6px 12px;cursor:pointer">データを読み込む</button>
+      <button type="button" style="font-size:13px;font-weight:600;color:#3d444d;background:#fff;border:1px solid #d7dbe0;border-radius:8px;padding:6px 12px;cursor:pointer">解像度：300dpi（印刷推奨）</button>
+      <button type="button" style="font-size:13px;font-weight:600;color:#616a75;background:#fff;border:1px solid #d7dbe0;border-radius:8px;padding:6px 12px;cursor:pointer">すべてリセット</button>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ showShelf }}" hint-placeholder-val="{{ true }}">
+    <div style="display:flex;align-items:center;gap:14px;padding:10px 20px;background:#fff;border-bottom:1px solid #d7dbe0">
+      <span style="font-size:12px;font-weight:700;color:#616a75;white-space:nowrap">保存済みデザイン</span>
+      <div style="display:flex;gap:8px;overflow-x:auto;flex:1;padding:2px">
+        <sc-for list="{{ shelf }}" as="d" hint-placeholder-count="5">
+          <button type="button" onClick="{{ d.pick }}" style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid {{ d.border }};box-shadow:{{ d.ring }};border-radius:10px;padding:5px 12px 5px 6px;cursor:pointer;white-space:nowrap">
+            <span style="width:26px;height:40px;border:1px solid #e2e8f0;background:{{ d.bg }};color:{{ d.fg }};font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center">￥</span>
+            <span style="display:flex;flex-direction:column;align-items:flex-start;line-height:1.35">
+              <span style="font-size:13px;font-weight:700;color:#1f2328">{{ d.name }}</span>
+              <span style="font-size:11px;color:#616a75">{{ d.meta }}</span>
+            </span>
+          </button>
+        </sc-for>
+      </div>
+      <button type="button" style="font-size:12px;font-weight:600;color:#0b6bcb;background:#fff;border:1px solid #bcd4ee;border-radius:8px;padding:7px 12px;cursor:pointer;white-space:nowrap" style-hover="background:#e7f0fb">＋ 今の見た目を保存</button>
+    </div>
+  </sc-if>
+
+  <main style="flex:1;display:grid;grid-template-columns:236px minmax(380px,420px) 1fr;align-items:stretch;min-height:0">
+
+    <section style="background:#f7f8fa;border-right:1px solid #d7dbe0;display:flex;flex-direction:column;gap:8px;padding:14px 12px">
+      <div style="display:flex;align-items:baseline;gap:6px">
+        <h2 style="font-size:13px;font-weight:700;margin:0">ポップ一覧</h2>
+        <span style="font-size:11px;color:#616a75">{{ cardCount }}</span>
+      </div>
+      <ul style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;overflow-y:auto;flex:1">
+        <sc-for list="{{ rows }}" as="r" hint-placeholder-count="3">
+          <li onClick="{{ r.pick }}" style="display:grid;grid-template-columns:40px 1fr;align-items:center;gap:10px;padding:8px;border:1px solid {{ r.border }};background:{{ r.bg }};border-radius:10px;cursor:pointer">
+            <span style="width:40px;height:61px;border:1px solid #e2e8f0;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;overflow:hidden">
+              <span style="font-size:5px;color:#616a75">{{ r.thumbName }}</span>
+              <span style="font-size:11px;font-weight:900;color:#111">{{ r.thumbPrice }}</span>
+            </span>
+            <span style="display:flex;flex-direction:column;min-width:0;line-height:1.4">
+              <span style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.name }}</span>
+              <span style="font-size:12px;color:#475569">{{ r.price }}</span>
+            </span>
+          </li>
+        </sc-for>
+      </ul>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <button type="button" onClick="{{ addCard }}" style="font-size:13px;font-weight:700;color:#0b6bcb;background:#fff;border:1px solid #bcd4ee;border-radius:8px;padding:9px 10px;cursor:pointer" style-hover="background:#e7f0fb">＋ ポップを追加</button>
+        <div style="display:flex;gap:6px">
+          <button type="button" style="flex:1;font-size:12px;font-weight:600;color:#3d444d;background:#fff;border:1px solid #d7dbe0;border-radius:8px;padding:7px 8px;cursor:pointer">複製</button>
+          <button type="button" style="flex:1;font-size:12px;font-weight:600;color:#616a75;background:#fff;border:1px solid #d7dbe0;border-radius:8px;padding:7px 8px;cursor:pointer">削除</button>
+        </div>
+        <p style="font-size:11px;color:#7c8590;margin:0;line-height:1.5">ドラッグ、または ↑↓ キーで並べ替えできます</p>
+      </div>
+    </section>
+
+    <section style="background:#fff;border-right:1px solid #d7dbe0;display:flex;flex-direction:column;min-height:0">
+      <div style="display:flex;gap:4px;padding:10px 14px 0;border-bottom:1px solid #d7dbe0">
+        <button type="button" onClick="{{ tabText }}" style="font-size:14px;font-weight:700;padding:9px 16px;border:none;border-bottom:3px solid {{ tab.textLine }};color:{{ tab.textColor }};background:transparent;cursor:pointer">文字を入れる</button>
+        <button type="button" onClick="{{ tabLook }}" style="font-size:14px;font-weight:700;padding:9px 16px;border:none;border-bottom:3px solid {{ tab.lookLine }};color:{{ tab.lookColor }};background:transparent;cursor:pointer">デザインを作る</button>
+      </div>
+
+      <div style="flex:1;overflow-y:auto;padding:16px 16px 40px">
+        <sc-if value="{{ isText }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <label style="display:flex;flex-direction:column;gap:5px">
+              <span style="font-size:13px;font-weight:700;color:#1f2328;display:flex;align-items:center;gap:6px">商品名<span style="font-size:10px;font-weight:700;color:#fff;background:#c0392b;border-radius:3px;padding:1px 5px">必須</span></span>
+              <textarea rows="2" style="width:100%;font-size:15px;line-height:1.5;color:#1f2328;background:#fff;border:1px solid #c9ced5;border-radius:8px;padding:9px 11px;resize:vertical" style-focus="outline:2px solid #0b6bcb;outline-offset:1px;border-color:#0b6bcb">北海道産 生クリーム大福</textarea>
+            </label>
+
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <span style="font-size:13px;font-weight:700;color:#1f2328;display:flex;align-items:center;gap:6px">価格<span style="font-size:10px;font-weight:700;color:#fff;background:#c0392b;border-radius:3px;padding:1px 5px">必須</span></span>
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="font-size:18px;font-weight:700;color:#616a75">¥</span>
+                <input type="text" value="298" inputmode="decimal" style="flex: 1; font-size: 22px; font-weight: 700; color: #1f2328; background: #fff; border: 1px solid #c9ced5; border-radius: 8px; padding: 8px 11px; width: 217px; height: 49px" style-focus="outline:2px solid #0b6bcb;outline-offset:1px;border-color:#0b6bcb">
+                <span style="font-size:15px;color:#616a75">円</span><select style="font-size: 13px; color: #1f2328; background: #fff; border: 1px solid #c9ced5; border-radius: 8px; padding: 8px 9px; width: 131px; height: 49px; text-align: left"><option selected="selected">税込</option><option>税抜</option><option>本体価格</option><option>税込価格</option><option>表示しない</option></select>
+                
+              </div>
+              <label style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:#3d444d;cursor:pointer">
+                <input type="checkbox" style="accent-color:#0b6bcb;width:15px;height:15px"><span>通常価格を打ち消し線で併記する</span>
+              </label>
+            </div>
+
+            <label style="display:flex;flex-direction:column;gap:5px">
+              <span style="font-size:13px;font-weight:700;color:#1f2328">キャッチコピー<span style="font-size:11px;font-weight:400;color:#7c8590;margin-left:4px">商品名の上に小さく入ります</span></span>
+              <input type="text" value="本日のおすすめ" placeholder="例）大人気！本日限り" style="width:100%;font-size:15px;color:#1f2328;background:#fff;border:1px solid #c9ced5;border-radius:8px;padding:9px 11px" style-focus="outline:2px solid #0b6bcb;outline-offset:1px;border-color:#0b6bcb">
+            </label>
+
+            <label style="display:flex;flex-direction:column;gap:5px">
+              <span style="font-size:13px;font-weight:700;color:#1f2328">説明文</span>
+              <textarea rows="3" placeholder="例）北海道産の生クリームを使用したなめらかな口どけ。" style="width:100%;font-size:15px;line-height:1.5;color:#1f2328;background:#fff;border:1px solid #c9ced5;border-radius:8px;padding:9px 11px;resize:vertical" style-focus="outline:2px solid #0b6bcb;outline-offset:1px;border-color:#0b6bcb">北海道産の生クリームをたっぷり使用。
+なめらかな口どけをお楽しみください。</textarea>
+            </label>
+
+            <label style="display:flex;flex-direction:column;gap:5px">
+              <span style="font-size:13px;font-weight:700;color:#1f2328">注記・店名</span>
+              <input type="text" value="※数量限定・なくなり次第終了" style="width:100%;font-size:14px;color:#1f2328;background:#fff;border:1px solid #c9ced5;border-radius:8px;padding:9px 11px" style-focus="outline:2px solid #0b6bcb;outline-offset:1px;border-color:#0b6bcb">
+            </label>
+
+            <details style="border:1px solid #e3e6ea;border-radius:10px;background:#f7f8fa">
+              <summary style="cursor:pointer;padding:11px 14px;font-size:13px;font-weight:700;color:#3d444d;display:flex;align-items:center;gap:8px"><span style="color:#7c8590">▸</span>細かい表記（通貨記号・単位・バッジ）</summary>
+              <div style="padding:0 14px 14px;display:flex;flex-direction:column;gap:12px">
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+                  <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;font-weight:600;color:#616a75">通貨記号</span>
+                    <select style="width:100%;font-size:13px;background:#fff;border:1px solid #c9ced5;border-radius:8px;padding:7px 9px"><option>なし</option><option selected="selected">¥</option><option>＠</option></select></label>
+                  <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;font-weight:600;color:#616a75">単位</span>
+                    <select style="width:100%;font-size:13px;background:#fff;border:1px solid #c9ced5;border-radius:8px;padding:7px 9px"><option selected="selected">円</option><option>円〜</option><option>なし</option></select></label>
+                  <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;font-weight:600;color:#616a75">補足</span>
+                    <input type="text" placeholder="/ 100g" style="width:100%;font-size:13px;background:#fff;border:1px solid #c9ced5;border-radius:8px;padding:7px 9px"></label>
+                </div>
+                <label style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:#3d444d;cursor:pointer"><input type="checkbox" style="accent-color:#0b6bcb;width:15px;height:15px"><span>バッジ（NEW・おすすめ など）を表示する</span></label>
+              </div>
+            </details>
+
+            <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:#f2f7fd;border:1px solid #cfe0f4;border-radius:10px">
+              <span style="font-size:12.5px;color:#3d444d;line-height:1.5">この文字を入れたまま、次のポップを作りますか？</span>
+              <button type="button" onClick="{{ addCard }}" style="margin-left:auto;font-size:12.5px;font-weight:700;color:#0b6bcb;background:#fff;border:1px solid #bcd4ee;border-radius:8px;padding:7px 12px;cursor:pointer;white-space:nowrap">複製して続ける</button>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isLook }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;gap:14px">
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <span style="font-size:13px;font-weight:700;color:#1f2328">テンプレート</span>
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+                <sc-for list="{{ templates }}" as="t" hint-placeholder-count="9">
+                  <button type="button" onClick="{{ t.pick }}" style="border:2px solid {{ t.border }};border-radius:10px;background:#fff;padding:0;cursor:pointer;overflow:hidden;text-align:center">
+                    <span style="height:44px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;background:{{ t.bg }};color:{{ t.fg }}">￥298</span>
+                    <span style="display:block;font-size:11px;padding:5px 2px;color:#3d444d;border-top:1px solid #e3e6ea">{{ t.name }}</span>
+                  </button>
+                </sc-for>
+              </div>
+              <button type="button" style="align-self:flex-start;font-size:12px;font-weight:600;color:#3d444d;background:#fff;border:1px solid #d7dbe0;border-radius:8px;padding:6px 12px;cursor:pointer">この見た目をすべてのポップに適用</button>
+            </div>
+
+            <details open="open" style="border:1px solid #e3e6ea;border-radius:10px;background:#f7f8fa">
+              <summary style="cursor:pointer;padding:11px 14px;font-size:13px;font-weight:700;color:#3d444d;display:flex;align-items:center;gap:8px"><span style="color:#7c8590">▾</span>文字（フォント・サイズ・色）</summary>
+              <div style="padding:0 14px 14px;display:flex;flex-direction:column;gap:12px">
+                <div style="display:flex;gap:2px;background:#e8eaee;border-radius:8px;padding:3px">
+                  <sc-for list="{{ textTabs }}" as="tt" hint-placeholder-count="5">
+                    <button type="button" onClick="{{ tt.pick }}" style="flex:1;font-size:12px;font-weight:700;color:{{ tt.color }};background:{{ tt.bg }};border:none;border-radius:6px;padding:7px 4px;cursor:pointer">{{ tt.label }}</button>
+                  </sc-for>
+                </div>
+                <label style="display:flex;flex-direction:column;gap:4px">
+                  <span style="font-size:12px;font-weight:600;color:#616a75">{{ activeTextLabel }}のフォント<span style="font-weight:400;margin-left:4px">全23種／系統別</span></span>
+                  <select style="width:100%;font-size:13px;background:#fff;border:1px solid #c9ced5;border-radius:8px;padding:8px 9px">
+                    <optgroup label="標準（このPCのフォント）"><option selected="selected">ゴシック体（標準）</option><option>明朝体</option><option>丸ゴシック体</option></optgroup>
+                    <optgroup label="ゴシック体"><option>Noto Sans JP（Web）</option><option>Stick（角ゴ細・Web）</option><option>Dela Gothic One（極太・Web）</option></optgroup>
+                    <optgroup label="明朝体"><option>Noto Serif JP（Web）</option><option>Kaisei Decol（やわらか明朝・Web）</option></optgroup>
+                    <optgroup label="丸ゴシック"><option>M PLUS Rounded 1c（丸・Web）</option><option>小杉丸ゴシック（Web）</option><option>RocknRoll One（ポップ・Web）</option></optgroup>
+                    <optgroup label="手書き"><option>Yusei Magic（手書き風・Web）</option><option>Zen Kurenaido（鉛筆風・Web）</option><option>Klee One（硬筆・Web）</option><option>Yomogi（ゆるカジュアル・Web）</option></optgroup>
+                    <optgroup label="筆・和レトロ"><option>Yuji Syuku（筆・楷書・Web）</option><option>Yuji Boku（筆・素朴・Web）</option><option>Yuji Mai（筆・流麗・Web）</option><option>New Tegomin（手書き明朝・Web）</option><option>Kiwi Maru（丸明朝・Web）</option></optgroup>
+                    <optgroup label="かわいい・ポップ"><option>Hachi Maru Pop（丸文字・Web）</option><option>Mochiy Pop One（太丸ポップ・Web）</option><option>Potta One（太マーカー・Web）</option></optgroup>
+                  </select>
+                </label>
+                <button type="button" style="align-self:flex-start;font-size:12px;font-weight:600;color:#3d444d;background:#fff;border:1px solid #d7dbe0;border-radius:8px;padding:6px 12px;cursor:pointer">このフォントを他の項目にも適用</button>
+                <label style="display:flex;flex-direction:column;gap:4px">
+                  <span style="font-size:12px;font-weight:600;color:#616a75">文字サイズ <output style="font-weight:700;color:#1f2328;font-variant-numeric:tabular-nums">13.4</output> pt</span>
+                  <div style="display:flex;gap:8px;align-items:center">
+                    <input type="range" min="10" max="300" value="13" style="flex:1;accent-color:#0b6bcb;height:22px">
+                    <input type="number" value="13.4" style="width:78px;font-size:13px;background:#fff;border:1px solid #c9ced5;border-radius:8px;padding:7px 9px">
+                  </div>
+                </label>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                  <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;font-weight:600;color:#616a75">太さ</span>
+                    <select style="width:100%;font-size:13px;background:#fff;border:1px solid #c9ced5;border-radius:8px;padding:7px 9px"><option>標準</option><option selected="selected">太字</option><option>極太</option></select></label>
+                  <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;font-weight:600;color:#616a75">文字色</span>
+                    <input type="color" value="#111111" style="width:100%;height:34px;padding:2px;background:#fff;border:1px solid #c9ced5;border-radius:8px;cursor:pointer"></label>
+                </div>
+                <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;font-weight:600;color:#616a75">行間 <output style="font-weight:700;color:#1f2328">1.25</output></span>
+                  <input type="range" min="1" max="2.6" step="0.05" value="1.25" style="accent-color:#0b6bcb;height:22px"></label>
+                <div style="display:flex;gap:8px;align-items:center;padding-top:2px">
+                  <span style="font-size:12px;font-weight:600;color:#616a75">全体を</span>
+                  <button type="button" style="font-size:12px;font-weight:600;background:#fff;border:1px solid #d7dbe0;border-radius:8px;padding:6px 12px;cursor:pointer">小さく −</button>
+                  <button type="button" style="font-size:12px;font-weight:600;background:#fff;border:1px solid #d7dbe0;border-radius:8px;padding:6px 12px;cursor:pointer">大きく ＋</button>
+                  <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#3d444d;margin-left:auto;cursor:pointer"><input type="checkbox" checked="checked" style="accent-color:#0b6bcb;width:15px;height:15px"><span>自動で縮小</span></label>
+                </div>
+              </div>
+            </details>
+
+            <details style="border:1px solid #e3e6ea;border-radius:10px;background:#f7f8fa">
+              <summary style="cursor:pointer;padding:11px 14px;font-size:13px;font-weight:700;color:#3d444d;display:flex;align-items:center;gap:8px"><span style="color:#7c8590">▸</span>配置・枠線・背景色</summary>
+              <div style="padding:0 14px 14px;display:flex;flex-direction:column;gap:12px">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                  <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;font-weight:600;color:#616a75">文字揃え</span>
+                    <select style="width:100%;font-size:13px;background:#fff;border:1px solid #c9ced5;border-radius:8px;padding:7px 9px"><option>中央揃え</option><option>左揃え</option><option>右揃え</option></select></label>
+                  <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;font-weight:600;color:#616a75">縦の配置</span>
+                    <select style="width:100%;font-size:13px;background:#fff;border:1px solid #c9ced5;border-radius:8px;padding:7px 9px"><option>中央</option><option>上寄せ</option><option>上下いっぱい</option></select></label>
+                  <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;font-weight:600;color:#616a75">背景色</span>
+                    <input type="color" value="#ffffff" style="width:100%;height:34px;padding:2px;background:#fff;border:1px solid #c9ced5;border-radius:8px;cursor:pointer"></label>
+                  <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;font-weight:600;color:#616a75">アクセント色</span>
+                    <input type="color" value="#333333" style="width:100%;height:34px;padding:2px;background:#fff;border:1px solid #c9ced5;border-radius:8px;cursor:pointer"></label>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+                  <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;font-weight:600;color:#616a75">枠線</span>
+                    <select style="width:100%;font-size:13px;background:#fff;border:1px solid #c9ced5;border-radius:8px;padding:7px 9px"><option>なし</option><option selected="selected">実線</option><option>二重線</option><option>破線</option><option>角丸</option></select></label>
+                  <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;font-weight:600;color:#616a75">太さ mm</span>
+                    <input type="number" value="0.3" step="0.1" style="width:100%;font-size:13px;background:#fff;border:1px solid #c9ced5;border-radius:8px;padding:7px 9px"></label>
+                  <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;font-weight:600;color:#616a75">枠線の色</span>
+                    <input type="color" value="#333333" style="width:100%;height:34px;padding:2px;background:#fff;border:1px solid #c9ced5;border-radius:8px;cursor:pointer"></label>
+                </div>
+              </div>
+            </details>
+
+            <details style="border:1px solid #e3e6ea;border-radius:10px;background:#f7f8fa">
+              <summary style="cursor:pointer;padding:11px 14px;font-size:13px;font-weight:700;color:#3d444d;display:flex;align-items:center;gap:8px"><span style="color:#7c8590">▸</span>ポップの大きさ・印刷する紙</summary>
+              <div style="padding:0 14px 14px;display:flex;flex-direction:column;gap:12px">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                  <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;font-weight:600;color:#616a75">ポップの大きさ</span>
+                    <select style="width:100%;font-size:13px;background:#fff;border:1px solid #c9ced5;border-radius:8px;padding:7px 9px">
+                      <option selected="selected">44×67mm（縦）</option><option>67×44mm（横）</option><option>名刺（91×55mm）</option><option>A8（52×74mm）</option><option>A7（74×105mm）</option><option>B8・JIS（64×91mm）</option><option>正方形（50×50mm）</option><option>カスタム（mm指定）</option>
+                    </select></label>
+                  <div style="display:flex;gap:8px">
+                    <label style="flex:1;display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;font-weight:600;color:#616a75">幅 mm</span>
+                      <input type="number" min="10" max="1000" step="0.5" value="44" style="width:100%;font-size:13px;background:#fff;border:1px solid #c9ced5;border-radius:8px;padding:7px 9px"></label>
+                    <label style="flex:1;display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;font-weight:600;color:#616a75">高さ mm</span>
+                      <input type="number" min="10" max="1000" step="0.5" value="67" style="width:100%;font-size:13px;background:#fff;border:1px solid #c9ced5;border-radius:8px;padding:7px 9px"></label>
+                  </div>
+                </div>
+                <label style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:#3d444d;cursor:pointer"><input type="checkbox" checked="checked" style="accent-color:#0b6bcb;width:15px;height:15px"><span>文字とレイアウトも比例させる</span></label>
+                <hr style="border:none;border-top:1px solid #e3e6ea;margin:0">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                  <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;font-weight:600;color:#616a75">印刷する紙</span>
+                    <select style="width:100%;font-size:13px;background:#fff;border:1px solid #c9ced5;border-radius:8px;padding:7px 9px">
+                      <optgroup label="JIS A判"><option>A3（297×420mm）</option><option selected="selected">A4（210×297mm）</option><option>A5（148×210mm）</option><option>A6（105×148mm）</option><option>A7（74×105mm）</option><option>A8（52×74mm）</option></optgroup>
+                      <optgroup label="JIS B判"><option>B4・JIS（257×364mm）</option><option>B5・JIS（182×257mm）</option><option>B6・JIS（128×182mm）</option><option>B7・JIS（91×128mm）</option><option>B8・JIS（64×91mm）</option></optgroup>
+                      <optgroup label="その他定型"><option>はがき（100×148mm）</option><option>名刺（91×55mm）</option><option>正方形（100×100mm）</option><option>短冊（210×74mm）</option></optgroup>
+                      <optgroup label="カスタム"><option>カスタムサイズ</option></optgroup>
+                    </select></label>
+                  <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;font-weight:600;color:#616a75">向き</span>
+                    <select style="width:100%;font-size:13px;background:#fff;border:1px solid #c9ced5;border-radius:8px;padding:7px 9px"><option selected="selected">縦</option><option>横</option></select></label>
+                  <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;font-weight:600;color:#616a75">安全余白 mm</span>
+                    <input type="number" min="0" max="30" step="0.5" value="5" style="width:100%;font-size:13px;background:#fff;border:1px solid #c9ced5;border-radius:8px;padding:7px 9px"></label>
+                  <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;font-weight:600;color:#616a75">ポップの間隔 mm</span>
+                    <input type="number" min="0" max="20" step="0.5" value="0" style="width:100%;font-size:13px;background:#fff;border:1px solid #c9ced5;border-radius:8px;padding:7px 9px"></label>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:6px">
+                  <label style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:#3d444d;cursor:pointer"><input type="checkbox" checked="checked" style="accent-color:#0b6bcb;width:15px;height:15px"><span>90°回して枚数が増えるなら回す</span></label>
+                  <label style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:#3d444d;cursor:pointer"><input type="checkbox" checked="checked" style="accent-color:#0b6bcb;width:15px;height:15px"><span>紙の中央に寄せる</span></label>
+                  <label style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:#3d444d;cursor:pointer"><input type="checkbox" checked="checked" style="accent-color:#0b6bcb;width:15px;height:15px"><span>カット線を入れる</span></label>
+                </div>
+                <p style="font-size:11px;color:#7c8590;margin:0;line-height:1.5">安全余白を 0mm にすると枚数は増えますが、フチなし印刷に対応したプリンタ以外では端が欠けます。</p>
+              </div>
+            </details>
+
+            <details style="border:1px solid #e3e6ea;border-radius:10px;background:#f7f8fa">
+              <summary style="cursor:pointer;padding:11px 14px;font-size:13px;font-weight:700;color:#3d444d;display:flex;align-items:center;gap:8px"><span style="color:#7c8590">▸</span>画像（写真・ロゴ）</summary>
+              <div style="padding:0 14px 14px;display:flex;gap:8px">
+                <button type="button" style="font-size:13px;font-weight:700;color:#fff;background:#0b6bcb;border:1px solid #0b6bcb;border-radius:8px;padding:8px 12px;cursor:pointer">画像を選ぶ</button>
+                <button type="button" style="font-size:13px;font-weight:600;color:#616a75;background:#fff;border:1px solid #d7dbe0;border-radius:8px;padding:8px 12px;cursor:pointer">削除</button>
+              </div>
+            </details>
+          </div>
+        </sc-if>
+      </div>
+    </section>
+
+    <section style="display:flex;flex-direction:column;min-width:0;padding:14px 20px 20px;gap:10px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="display:flex;gap:4px;background:#e2e5e9;border-radius:999px;padding:3px">
+          <button type="button" onClick="{{ viewCard }}" style="border:none;border-radius:999px;padding:6px 18px;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap;color:{{ view.cardColor }};background:{{ view.cardBg }}">ポップ1枚</button>
+          <button type="button" onClick="{{ viewSheet }}" style="border:none;border-radius:999px;padding:6px 18px;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap;color:{{ view.sheetColor }};background:{{ view.sheetBg }}">印刷される紙</button>
+        </div>
+        <span style="font-size:12px;color:#616a75;margin-left:auto">{{ metaText }}</span>
+      </div>
+
+      <div style="flex:1;display:flex;align-items:center;justify-content:center;background-image:linear-gradient(45deg,#e5e7ea 25%,transparent 25%,transparent 75%,#e5e7ea 75%),linear-gradient(45deg,#e5e7ea 25%,transparent 25%,transparent 75%,#e5e7ea 75%);background-size:20px 20px;background-position:0 0,10px 10px;background-color:#f5f6f8;border:1px solid #d7dbe0;border-radius:12px;padding:20px;min-height:0;overflow:auto">
+        <sc-if value="{{ isCardView }}" hint-placeholder-val="{{ true }}">
+          <div style="width:396px;height:603px;background:#fff;border:3px solid #333;box-shadow:0 2px 6px rgba(0,0,0,.12),0 14px 34px rgba(0,0,0,.14);padding:26px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center">
+            <div style="font-size:14px;font-weight:700;color:#666;line-height:1.3">本日のおすすめ</div>
+            <div style="font-size:42px;font-weight:700;color:#111;line-height:1.25;text-wrap:pretty">北海道産<br>生クリーム大福</div>
+            <div style="width:60%;border-top:1px solid #333"></div>
+            <div style="display:flex;align-items:baseline;justify-content:center;color:#111;font-weight:900">
+              <span style="font-size:34px">¥</span><span style="font-size:74px;line-height:1">298</span><span style="font-size:27px">円</span><span style="font-size:16px;font-weight:700;margin-left:4px">（税込）</span>
+            </div>
+            <div style="font-size:12px;color:#333;line-height:1.6">北海道産の生クリームをたっぷり使用。<br>なめらかな口どけをお楽しみください。</div>
+            <div style="font-size:8.5px;color:#777">※数量限定・なくなり次第終了</div>
+          </div>
+        </sc-if>
+        <sc-if value="{{ isSheetView }}" hint-placeholder-val="{{ false }}">
+          <div style="width:378px;height:535px;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.12),0 14px 34px rgba(0,0,0,.14);padding:9px;display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(4,1fr);gap:0">
+            <sc-for list="{{ slots }}" as="s" hint-placeholder-count="16">
+              <span style="border:1px dashed #cfd4da;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;overflow:hidden">
+                <span style="font-size:5.5px;color:#616a75">{{ s.name }}</span>
+                <span style="font-size:13px;font-weight:900;color:{{ s.priceColor }}">{{ s.price }}</span>
+              </span>
+            </sc-for>
+          </div>
+        </sc-if>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;background:#fff;border:1px solid #d7dbe0;border-radius:10px">
+        <span style="font-size:13px;color:#3d444d">{{ sheetSummary }}</span>
+        <span style="font-size:12px;color:#7c8590">プリンタ設定は「実際のサイズ（100%）」を選んでください</span>
+        <button type="button" style="margin-left:auto;font-size:14px;font-weight:700;color:#fff;background:#0b6bcb;border:1px solid #0b6bcb;border-radius:8px;padding:8px 20px;cursor:pointer" style-hover="background:#0a5aab">印刷する</button>
+      </div>
+    </section>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showShelf&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;表示&quot;}}">
+class Component extends DCLogic {
+  state = { tab: 'text', view: 'card', card: 0, tpl: 0, tt: 0, design: 0, moreOpen: false, cards: 3 };
+
+  renderVals() {
+    const on = '#fff', onC = '#0b6bcb', off = 'transparent', offC = '#616a75';
+    const cards = [
+      { name: '北海道産 生クリーム大福', price: '¥298' },
+      { name: '和栗のモンブラン', price: '¥480' },
+      { name: '塩バターロール', price: '¥138' }
+    ];
+    const tplList = [
+      ['シンプル', '#ffffff', '#222222'], ['セール', '#e60012', '#ffff00'], ['ポップ', '#ffe100', '#ff6a00'],
+      ['ナチュラル', '#efe7d8', '#5c4a33'], ['手書き風', '#ffffff', '#2b6cb0'], ['かわいい', '#fff0f5', '#e05a8a'],
+      ['和風', '#f7f3e8', '#7b2d26'], ['レトロ', '#f3efe3', '#4a6741'], ['ダーク', '#1f2933', '#f0b429']
+    ];
+    const ttLabels = ['商品名', 'キャッチ', '価格', '説明文', '注記'];
+    const shelfList = [
+      ['お菓子コーナー用', 'シンプル・44×67mm', '#ffffff', '#222222'],
+      ['特売（赤）', 'セール・44×67mm', '#e60012', '#ffff00'],
+      ['青果・手書き', '手書き風・67×44mm', '#ffffff', '#2b6cb0'],
+      ['惣菜 和風', '和風・名刺サイズ', '#f7f3e8', '#7b2d26'],
+      ['冷凍・ダーク', 'ダーク・A8', '#1f2933', '#f0b429']
+    ];
+    const slots = [];
+    for (let i = 0; i < 16; i++) {
+      const c = cards[i % 3];
+      const used = i < 3;
+      slots.push({
+        name: used ? c.name : '', price: used ? c.price : '',
+        priceColor: '#111'
+      });
+    }
+    return {
+      showShelf: this.props.showShelf ?? true,
+      moreOpen: this.state.moreOpen,
+      toggleMore: () => this.setState(s => ({ moreOpen: !s.moreOpen })),
+      savedLabel: '自動保存済み',
+      cardCount: `${this.state.cards}枚`,
+      rows: cards.slice(0, this.state.cards).map((c, i) => ({
+        name: c.name, price: c.price, thumbName: c.name.slice(0, 6), thumbPrice: c.price,
+        bg: i === this.state.card ? '#e7f0fb' : '#fff',
+        border: i === this.state.card ? '#0b6bcb' : '#e3e6ea',
+        pick: () => this.setState({ card: i })
+      })),
+      addCard: () => this.setState(s => ({ cards: Math.min(3, s.cards + 1) })),
+      shelf: shelfList.map((d, i) => ({
+        name: d[0], meta: d[1], bg: d[2], fg: d[3],
+        border: i === this.state.design ? '#0b6bcb' : '#d7dbe0',
+        ring: i === this.state.design ? '0 0 0 3px #e7f0fb' : 'none',
+        pick: () => this.setState({ design: i })
+      })),
+      tab: {
+        textLine: this.state.tab === 'text' ? '#0b6bcb' : 'transparent',
+        textColor: this.state.tab === 'text' ? '#0b6bcb' : '#616a75',
+        lookLine: this.state.tab === 'look' ? '#0b6bcb' : 'transparent',
+        lookColor: this.state.tab === 'look' ? '#0b6bcb' : '#616a75'
+      },
+      isText: this.state.tab === 'text',
+      isLook: this.state.tab === 'look',
+      tabText: () => this.setState({ tab: 'text' }),
+      tabLook: () => this.setState({ tab: 'look' }),
+      templates: tplList.map((t, i) => ({
+        name: t[0], bg: t[1], fg: t[2],
+        border: i === this.state.tpl ? '#0b6bcb' : '#e3e6ea',
+        pick: () => this.setState({ tpl: i })
+      })),
+      textTabs: ttLabels.map((l, i) => ({
+        label: l,
+        bg: i === this.state.tt ? on : off,
+        color: i === this.state.tt ? onC : offC,
+        pick: () => this.setState({ tt: i })
+      })),
+      activeTextLabel: ttLabels[this.state.tt],
+      view: {
+        cardBg: this.state.view === 'card' ? '#0b6bcb' : 'transparent',
+        cardColor: this.state.view === 'card' ? '#fff' : '#475569',
+        sheetBg: this.state.view === 'sheet' ? '#0b6bcb' : 'transparent',
+        sheetColor: this.state.view === 'sheet' ? '#fff' : '#475569'
+      },
+      viewCard: () => this.setState({ view: 'card' }),
+      viewSheet: () => this.setState({ view: 'sheet' }),
+      isCardView: this.state.view === 'card',
+      isSheetView: this.state.view === 'sheet',
+      metaText: 'ポップ 44×67mm ／ A4 縦 ／ 実寸表示',
+      slots,
+      sheetSummary: `A4 1枚に16枚ぶん並びます（${this.state.cards}枚を印刷 → 1ページ）`
+    };
+  }
+}
+</script>
+</body>
+</html>

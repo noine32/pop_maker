@@ -10,7 +10,7 @@ var POPCardsUI = (function () {
   var timer = null;
   var dragFrom = -1;
 
-  var THUMB_W = 34;          /* CSS の .cardrow__thumb と合わせる */
+  var THUMB_W = 40;          /* CSS の .cardrow__thumb と合わせる */
   var REBUILD_DEBOUNCE_MS = 200;
 
   function esc(s) {
@@ -32,14 +32,16 @@ var POPCardsUI = (function () {
     var doc = opts.getDoc();
     listEl.innerHTML = doc.cards.map(function (c, i) {
       var l = rowLabel(c);
+      /* 連番は出さない。サムネイルと商品名で見分けられるうえ、
+         番号があると面付けの並び順と取り違えられるため。 */
       return '<li class="cardrow' + (i === doc.activeIndex ? ' is-active' : '') + '"' +
         ' role="option" aria-selected="' + (i === doc.activeIndex) + '"' +
         ' data-index="' + i + '" draggable="true" title="' + esc(l.name) + '">' +
         '<canvas class="cardrow__thumb" width="1" height="1" aria-hidden="true"></canvas>' +
-        '<span class="cardrow__no">' + (i + 1) + '</span>' +
+        '<span class="cardrow__labels">' +
         '<span class="cardrow__name">' + esc(l.name) + '</span>' +
         '<span class="cardrow__price">' + esc(l.price) + '</span>' +
-        '</li>';
+        '</span></li>';
     }).join('');
     drawThumbs();
     scrollActiveIntoView();
@@ -138,6 +140,8 @@ var POPCardsUI = (function () {
     document.getElementById('btn-card-add').disabled = full;
     document.getElementById('btn-card-dup').disabled = full;
     document.getElementById('btn-card-del').disabled = doc.cards.length <= 1;
+    var count = document.getElementById('card-count');
+    if (count) count.textContent = doc.cards.length + '枚';
   }
 
   function refreshNow() { build(); updateOps(); }
